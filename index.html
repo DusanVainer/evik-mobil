@@ -1,0 +1,4146 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evik - Správa výsevů a rostlin</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --primary: #2e7d32;
+            --primary-hover: #1b5e20;
+            --bg-color: #f4f6f5;
+            --card-bg: #ffffff;
+            --text-color: #2c3e50;
+            --border-color: #d0d7de;
+            --radius: 12px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 16px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 480px;
+            transition: max-width 0.3s ease;
+        }
+
+        /* Responzivita pro tablety a širší obrazovky (od 768px výše) */
+        @media (min-width: 768px) {
+            .container {
+                max-width: 760px;
+            }
+
+            .filter-row, .dashboard-grid {
+                display: flex;
+                gap: 12px;
+            }
+
+            .filter-row > div {
+                flex: 1;
+            }
+
+            .dashboard-grid {
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+
+            .dash-card {
+                flex: 1;
+                min-width: 200px;
+            }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            padding: 20px;
+            margin-bottom: 16px;
+            border-radius: var(--radius);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        h2 {
+            margin-top: 0;
+            color: var(--primary);
+            font-size: 1.3rem;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .field-group {
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.85rem;
+            margin-bottom: 4px;
+            color: #4a5568;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="date"],
+        input[type="email"],
+        input[type="password"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: #fff;
+            font-size: 0.95rem;
+            box-sizing: border-box;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.15);
+        }
+
+        textarea {
+            resize: vertical;
+            height: 70px;
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .filter-row > div {
+            flex: 1;
+        }
+
+        /* Styly pro rychlé přepínací filtry */
+        .quick-filters-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .qf-btn {
+            background-color: #f1f8f2;
+            color: var(--primary);
+            border: 1px solid #c8e6c9;
+            padding: 8px 4px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .qf-btn:hover {
+            background-color: #e8f5e9;
+        }
+
+        .qf-btn.active {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .qf-btn.danger {
+            background-color: #ffebee;
+            color: #c62828;
+            border-color: #ffcdd2;
+        }
+        .qf-btn.danger.active {
+            background-color: #c62828;
+            color: white;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 8px 0 14px 0;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            margin-bottom: 0;
+            cursor: pointer;
+            font-weight: normal;
+        }
+
+        /* Přihlašovací obrazovka */
+        .login-error {
+            display: none;
+            background-color: #fdecea;
+            color: #c62828;
+            border: 1px solid #f5c6cb;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 0.85rem;
+            margin-bottom: 14px;
+        }
+
+        .user-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            color: #718096;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .user-bar a {
+            color: var(--primary);
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .user-bar a:hover {
+            text-decoration: underline;
+        }
+
+        .btn-container {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button[type="submit"], .btn-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        button[type="submit"]:hover, .btn-primary:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button[type="button"], .btn-secondary {
+            background-color: #e2e8f0;
+            color: #4a5568;
+        }
+
+        button[type="button"]:hover, .btn-secondary:hover {
+            background-color: #cbd5e1;
+        }
+
+        .btn-accent {
+            background-color: #1976d2;
+            color: white;
+        }
+
+        .btn-accent:hover {
+            background-color: #115293;
+        }
+
+        /* Styl pro rozbalovací akordeon tlačítka */
+        .accordion-btn {
+            background-color: #f1f8f2;
+            color: var(--primary);
+            border: 1px solid #c8e6c9;
+            width: 100%;
+            text-align: left;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            margin-top: 12px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .accordion-btn:hover {
+            background-color: #e8f5e9;
+        }
+
+        .dashboard-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .dash-card {
+            background: #ffffff;
+            border: 2px solid #e8f5e9;
+            border-radius: var(--radius);
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+        }
+
+        .dash-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 4px 12px rgba(46, 125, 50, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .dash-card.locked {
+            cursor: default;
+            opacity: 0.55;
+            background: #f4f6f5;
+        }
+
+        .dash-card.locked:hover {
+            border-color: #e8f5e9;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+            transform: none;
+        }
+
+        .dash-card-lock-note {
+            font-size: 0.75rem;
+            color: var(--primary);
+            font-weight: 600;
+            margin-top: 6px;
+        }
+
+        .dash-card h3 {
+            margin: 0 0 8px 0;
+            color: var(--primary);
+            font-size: 1.2rem;
+        }
+
+        .dash-card p {
+            margin: 0;
+            color: #718096;
+            font-size: 0.9rem;
+        }
+
+        /* Sjednocený a kompaktní vzhled karet v katalogu */
+        .plant-item-card {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .plant-item-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 2px 6px rgba(46, 125, 50, 0.15);
+        }
+
+        .plant-row-main {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .plant-id {
+            color: var(--primary);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .plant-name {
+            font-weight: bold;
+            color: var(--text-color);
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .plant-status {
+            color: #555;
+            font-weight: 500;
+            background: #f1f3f5;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+
+        .plant-row-sub {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: #718096;
+            margin-top: 4px;
+            border-top: 1px solid #f8f9fa;
+            padding-top: 3px;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #edf2f7;
+            font-size: 0.95rem;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #718096;
+        }
+
+        .detail-value {
+            color: var(--text-color);
+            text-align: right;
+        }
+
+        .poznamka-entry {
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            background: #f7faf7;
+            border-left: 3px solid var(--primary);
+            border-radius: 4px;
+        }
+
+        .poznamka-entry-meta {
+            font-size: 0.75rem;
+            color: #718096;
+            margin-bottom: 4px;
+        }
+
+        .poznamka-entry-text {
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .poznamka-empty {
+            font-size: 0.85rem;
+            color: #a0aec0;
+            font-style: italic;
+            margin-bottom: 12px;
+        }
+
+        /* --- Statistiky (mobilní varianta grafů - pruhy místo sloupcových
+           grafů, ať je to čitelné i na malém displeji). --- */
+        .stat-tiles {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .stat-tile {
+            flex: 1;
+            background: #f1f8f2;
+            border: 1px solid #c8e6c9;
+            border-radius: 10px;
+            padding: 12px 6px;
+            text-align: center;
+        }
+
+        .stat-tile-value {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--primary);
+            line-height: 1.2;
+        }
+
+        .stat-tile-label {
+            font-size: 0.7rem;
+            color: #718096;
+            margin-top: 2px;
+        }
+
+        .stat-section-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 22px 0 10px 0;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: left;
+        }
+
+        .stat-section-title:first-of-type {
+            margin-top: 4px;
+        }
+
+        .stat-hint {
+            font-size: 0.78rem;
+            color: #a0aec0;
+            margin: -4px 0 10px 0;
+        }
+
+        .stat-row {
+            margin-bottom: 10px;
+        }
+
+        .stat-row-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 8px;
+            font-size: 0.85rem;
+            margin-bottom: 4px;
+        }
+
+        .stat-row-label {
+            font-weight: 600;
+            color: var(--text-color);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .stat-row-value {
+            color: #718096;
+            font-size: 0.78rem;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .stat-bar-track {
+            background: #edf2f7;
+            border-radius: 6px;
+            height: 8px;
+            overflow: hidden;
+        }
+
+        .stat-bar-fill {
+            background: var(--primary);
+            height: 100%;
+            border-radius: 6px;
+        }
+
+        .stat-bar-fill.danger {
+            background: #c62828;
+        }
+
+        .stat-bar-fill.accent {
+            background: #1976d2;
+        }
+
+        .stat-empty {
+            font-size: 0.85rem;
+            color: #a0aec0;
+            font-style: italic;
+            margin-bottom: 12px;
+        }
+
+        /* Klikatelné řádky ve statistikách (drill-down podle rodu/druhu) */
+        .stat-row-clickable {
+            cursor: pointer;
+        }
+
+        .stat-row-clickable:hover .stat-row-label {
+            color: var(--primary);
+        }
+
+        .stat-row-chevron {
+            color: #a0aec0;
+            margin-left: 4px;
+        }
+
+        /* Detailní (rozklikávací) panel klíčivosti podle rodu/druhu */
+        .stat-detail-back {
+            display: inline-block;
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+
+        .stat-detail-subtitle {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #4a5568;
+            margin: 14px 0 6px 0;
+        }
+
+        .stat-detail-subtitle:first-of-type {
+            margin-top: 0;
+        }
+
+        .stat-detail-record {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 10px;
+            margin-bottom: 6px;
+            cursor: pointer;
+        }
+
+        .stat-detail-record:hover {
+            border-color: var(--primary);
+        }
+
+        .stat-detail-record-head {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .stat-detail-record-sub {
+            font-size: 0.75rem;
+            color: #718096;
+            margin-top: 2px;
+        }
+
+        /* Timeline akvizic - výběr roku + souhrnný řádek nad měsíčními pruhy */
+        .stat-akvizice-souhrn {
+            font-size: 0.85rem;
+            color: #4a5568;
+            margin: 0 0 12px 0;
+        }
+
+        /* Rozbalovací lišty statistik - vzhled převzatý z .accordion-btn
+           (stejné lišty jako v detailu rostliny), otevřená lišta má
+           tmavší podklad a otočenou šipku. */
+        .stat-acc-btn.open {
+            background-color: #e8f5e9;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .stat-acc-chevron {
+            transition: transform 0.2s;
+        }
+
+        .stat-acc-btn.open .stat-acc-chevron {
+            transform: rotate(180deg);
+        }
+
+        .stat-acc-body {
+            border: 1px solid #c8e6c9;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            padding: 14px 12px 4px 12px;
+        }
+        /* Úprava / smazání poznámky (sql_39) */
+        .poznamka-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        .poznamka-btn {
+            flex: 0 0 auto;
+            padding: 4px 10px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            border-radius: 6px;
+        }
+
+        .poznamka-btn-danger {
+            background-color: #ffebee !important;
+            color: #c62828 !important;
+        }
+
+        .poznamka-edit-textarea {
+            height: 90px;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- PŘIHLAŠOVACÍ POHLED -->
+        <div id="view-login" class="card hidden">
+            <h2>🔐 Přihlášení do Evik</h2>
+            <form id="form-login" onsubmit="handleLoginSubmit(event)">
+                <div id="login-error" class="login-error"></div>
+
+                <div class="field-group">
+                    <label for="login-email">E-mail</label>
+                    <input type="email" id="login-email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+                </div>
+
+                <div class="field-group">
+                    <label for="login-heslo">Heslo</label>
+                    <input type="password" id="login-heslo" autocomplete="current-password" required>
+                </div>
+
+                <button type="submit" class="btn-primary" style="width: 100%;" id="login-submit-btn">Přihlásit se</button>
+            </form>
+            <div style="display: flex; justify-content: space-between; margin-top: 14px; font-size: 0.85rem;">
+                <a onclick="switchView('forgot-password')" style="color: var(--primary); font-weight: 600; cursor: pointer;">Zapomenuté heslo?</a>
+                <a onclick="switchView('register')" style="color: var(--primary); font-weight: 600; cursor: pointer;">Vytvořit účet</a>
+            </div>
+        </div>
+
+        <!-- ZAPOMENUTÉ HESLO -->
+        <div id="view-forgot-password" class="card hidden">
+            <h2>🔑 Zapomenuté heslo</h2>
+            <p style="color: #718096; font-size: 0.9rem; margin-top: -8px; margin-bottom: 16px;">
+                Zadej e-mail, na který jsi registrován(a). Pošleme ti odkaz pro nastavení nového hesla.
+            </p>
+            <div id="forgot-password-error" class="login-error"></div>
+            <div id="forgot-password-success" class="login-error" style="display: none; background-color: #f1f8f2; color: #2e7d32; border-color: #c8e6c9;"></div>
+            <form id="form-forgot-password" onsubmit="handleForgotPasswordSubmit(event)">
+                <div class="field-group">
+                    <label for="forgot-email">E-mail</label>
+                    <input type="email" id="forgot-email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+                </div>
+                <button type="submit" class="btn-primary" style="width: 100%;" id="forgot-password-submit-btn">Odeslat odkaz na obnovu hesla</button>
+            </form>
+            <div class="btn-container">
+                <button type="button" class="btn-secondary" onclick="switchView('login')">← Zpět na přihlášení</button>
+            </div>
+        </div>
+
+        <!-- NASTAVENÍ NOVÉHO HESLA (po kliknutí na odkaz z e-mailu) -->
+        <div id="view-reset-password" class="card hidden">
+            <h2>🔑 Nastavit nové heslo</h2>
+            <div id="reset-password-error" class="login-error"></div>
+            <form id="form-reset-password" onsubmit="handleResetPasswordSubmit(event)">
+                <div class="field-group">
+                    <label for="reset-heslo-1">Nové heslo</label>
+                    <input type="password" id="reset-heslo-1" autocomplete="new-password" minlength="8" required>
+                </div>
+                <div class="field-group">
+                    <label for="reset-heslo-2">Nové heslo znovu</label>
+                    <input type="password" id="reset-heslo-2" autocomplete="new-password" minlength="8" required>
+                </div>
+                <span style="font-size: 0.75rem; color: #718096; display: block; margin-bottom: 10px;">Heslo musí mít alespoň 8 znaků.</span>
+                <button type="submit" class="btn-primary" style="width: 100%;" id="reset-password-submit-btn">Uložit nové heslo</button>
+            </form>
+        </div>
+
+        <!-- REGISTRACE -->
+        <div id="view-register" class="card hidden">
+            <h2>🌵 Vytvořit účet</h2>
+            <div id="register-error" class="login-error"></div>
+            <form id="form-register" onsubmit="handleRegisterSubmit(event)">
+                <div class="field-group">
+                    <label for="register-jmeno">Jméno</label>
+                    <input type="text" id="register-jmeno" autocomplete="name" required>
+                </div>
+                <div class="field-group">
+                    <label for="register-email">E-mail</label>
+                    <input type="email" id="register-email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+                </div>
+                <div class="field-group">
+                    <label for="register-heslo-1">Heslo</label>
+                    <input type="password" id="register-heslo-1" autocomplete="new-password" minlength="8" required>
+                </div>
+                <div class="field-group">
+                    <label for="register-heslo-2">Heslo znovu</label>
+                    <input type="password" id="register-heslo-2" autocomplete="new-password" minlength="8" required>
+                </div>
+                <span style="font-size: 0.75rem; color: #718096; display: block; margin-bottom: 10px;">Heslo musí mít alespoň 8 znaků.</span>
+                <button type="submit" class="btn-primary" style="width: 100%;" id="register-submit-btn">Vytvořit účet</button>
+            </form>
+            <div class="btn-container">
+                <button type="button" class="btn-secondary" onclick="switchView('login')">← Zpět na přihlášení</button>
+            </div>
+        </div>
+
+        <!-- DASHBOARD POHLED -->
+        <div id="view-dashboard" class="card hidden">
+            <div class="user-bar">
+                <span>Přihlášen(a) jako: <strong id="current-user-label"></strong></span>
+                <span style="display: flex; gap: 12px;">
+                    <a onclick="switchView('nastaveni')">⚙️ Nastavení</a>
+                    <a onclick="handleLogout()">Odhlásit se</a>
+                </span>
+            </div>
+
+            <!-- Proaktivní upozornění na limit záznamů free tarifu (viz
+                 claude/sql_16_tarify_limit_zaznamu.sql) - zobrazí se jen
+                 uživatelům s tarif = 'free', doplněno o refreshLimitInfo()
+                 ve switchView(). Placený tarif nemá limit, takže se mu
+                 tenhle box vůbec neukazuje. -->
+            <div id="tarif-limit-banner" class="hidden" style="font-size: 0.8rem; padding: 8px 12px; border-radius: 8px; margin-bottom: 14px; text-align: center;"></div>
+
+            <h2>🌵 Evik - Správa sbírky</h2>
+            <div class="dashboard-grid">
+                <div class="dash-card" onclick="switchView('list-rostliny')">
+                    <h3>🔍 Katalog a vyhledávání rostlin</h3>
+                    <p>Prohlížení, filtrování, řazení a detailní karty podle ID</p>
+                </div>
+                <div class="dash-card" onclick="switchView('form-vysev')">
+                    <h3>🌱 Nový výsev</h3>
+                    <p>Zápis nového výsevu semen</p>
+                </div>
+                <div class="dash-card" onclick="switchView('form-rostlina')">
+                    <h3>🌿 Nová rostlina / akvizice</h3>
+                    <p>Zápis koupené rostliny, daru, odnože atd.</p>
+                </div>
+                <div class="dash-card" id="dash-card-statistiky" onclick="switchView('statistiky')">
+                    <h3>📊 Statistiky sbírky</h3>
+                    <p id="dash-card-statistiky-text">Klíčivost, ztráty a podnože tvé sbírky</p>
+                </div>
+                <div class="dash-card" onclick="switchView('form-hlaseni-chyby')">
+                    <h3>💬 Nahlásit chybu nebo nápad</h3>
+                    <p>Něco nefunguje, jak má, nebo máš nápad na vylepšení? Dej mi vědět.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- NASTAVENÍ ÚČTU -->
+        <div id="view-nastaveni" class="card hidden">
+            <h2>⚙️ Nastavení účtu</h2>
+
+            <h3 style="font-size: 1rem; color: var(--primary); margin-bottom: 10px;">Změna hesla</h3>
+            <div id="change-password-error" class="login-error"></div>
+            <div id="change-password-success" class="login-error" style="display: none; background-color: #f1f8f2; color: #2e7d32; border-color: #c8e6c9;"></div>
+            <form id="form-change-password" onsubmit="handleChangePasswordSubmit(event)">
+                <div class="field-group">
+                    <label for="change-heslo-1">Nové heslo</label>
+                    <input type="password" id="change-heslo-1" autocomplete="new-password" minlength="8" required>
+                </div>
+                <div class="field-group">
+                    <label for="change-heslo-2">Nové heslo znovu</label>
+                    <input type="password" id="change-heslo-2" autocomplete="new-password" minlength="8" required>
+                </div>
+                <span style="font-size: 0.75rem; color: #718096; display: block; margin-bottom: 10px;">Heslo musí mít alespoň 8 znaků.</span>
+                <button type="submit" class="btn-primary" style="width: 100%;" id="change-password-submit-btn">Změnit heslo</button>
+            </form>
+
+            <div style="margin-top: 28px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                <h3 style="font-size: 1rem; color: #c62828; margin-bottom: 6px;">Nebezpečná zóna</h3>
+                <p style="font-size: 0.85rem; color: #718096; margin-top: 0;">Smazání účtu je nevratné. Zmizí všechny tvoje rostliny, výsevy, poznámky i samotný uživatelský účet.</p>
+                <button type="button" style="width: 100%; background-color: #c62828; color: white; border-color: #c62828;" onclick="handleDeleteAccountClick()">❌ Smazat účet natrvalo</button>
+            </div>
+
+            <div class="btn-container" style="margin-top: 20px;">
+                <button type="button" class="btn-secondary" onclick="switchView('dashboard')">🏠 Hlavní nabídka</button>
+            </div>
+        </div>
+
+        <!-- FORMULÁŘ PRO NAHLÁŠENÍ CHYBY / NÁVRHU -->
+        <div id="view-form-hlaseni-chyby" class="card hidden">
+            <h2>💬 Nahlásit chybu nebo nápad</h2>
+            <p style="color: #718096; font-size: 0.9rem; margin-top: -8px; margin-bottom: 16px;">
+                Popiš, co se stalo a co jsi očekával(a), že se stane - anebo napiš nápad na vylepšení. Klidně i drobnost.
+            </p>
+            <form id="form-hlaseni-chyby" onsubmit="handleHlaseniChybySubmit(event)">
+                <div class="field-group">
+                    <label>Typ hlášení</label>
+                    <div class="checkbox-group" style="gap: 20px;">
+                        <label style="font-weight: normal; display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer;">
+                            <input type="radio" name="hlaseni-typ" value="chyba" checked> 🐞 Chyba
+                        </label>
+                        <label style="font-weight: normal; display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer;">
+                            <input type="radio" name="hlaseni-typ" value="navrh"> 💡 Návrh / nápad
+                        </label>
+                    </div>
+                </div>
+                <div class="field-group">
+                    <label for="hlaseni-text-input">Popis</label>
+                    <textarea id="hlaseni-text-input" placeholder="Např. Po kliknutí na Uložit se nic nestalo, měl jsem vyplněné... / Bylo by super, kdyby appka uměla..." required></textarea>
+                </div>
+                <div class="field-group">
+                    <span style="font-size: 0.8rem; color: #718096;">Odesílá se z: <strong id="hlaseni-kontext-label">dashboard</strong></span>
+                </div>
+                <button type="submit" class="btn-primary" style="width: 100%;">Odeslat</button>
+            </form>
+            <div class="btn-container" style="margin-top: 20px;">
+                <button type="button" class="btn-secondary" onclick="switchView('dashboard')">🏠 Hlavní nabídka</button>
+            </div>
+        </div>
+
+        <!-- FORMULÁŘ PRO VÝSEV -->
+        <div id="view-form-vysev" class="card hidden">
+            <h2>Nový výsev</h2>
+            <div id="vysev-limit-banner" class="hidden" style="font-size: 0.8rem; padding: 8px 12px; border-radius: 8px; margin-bottom: 14px; text-align: center;"></div>
+            <form id="form-vysev-data" onsubmit="handleVysevSubmit(event)">
+
+                <div class="field-group" id="group-vysev-rod-select">
+                    <label for="vysev-rod-select">Rod</label>
+                    <select id="vysev-rod-select">
+                        <option value="">Načítám rody...</option>
+                    </select>
+                </div>
+
+                <div class="checkbox-group">
+                    <input type="checkbox" id="vysev-new-rod-checkbox" onchange="toggleVysevNewRod()">
+                    <label for="vysev-new-rod-checkbox">Zadat nový rod</label>
+                </div>
+
+                <div class="field-group hidden" id="group-vysev-rod-input">
+                    <label for="vysev-rod-new-input">Jméno nového rodu</label>
+                    <input type="text" id="vysev-rod-new-input" placeholder="Zadej jméno nového rodu">
+                </div>
+
+                <div class="field-group">
+                    <label for="vysev-druh-input">Druh</label>
+                    <input type="text" id="vysev-druh-input" placeholder="např. hintonii" required>
+                </div>
+
+                <div class="field-group">
+                    <label for="vysev-varieta-input">Varieta / Forma (nepovinné)</label>
+                    <input type="text" id="vysev-varieta-input" placeholder="např. albiflora">
+                </div>
+
+                <div class="field-group">
+                    <label for="vysev-polni-cislo-input">Polní číslo (nepovinné)</label>
+                    <input type="text" id="vysev-polni-cislo-input" placeholder="např. SB 1234">
+                </div>
+
+                <div class="field-group" id="group-vysev-dodavatel-select">
+                    <label for="vysev-dodavatel-select">Dodavatel</label>
+                    <select id="vysev-dodavatel-select">
+                        <option value="">Načítám dodavatele...</option>
+                    </select>
+                </div>
+
+                <div class="checkbox-group">
+                    <input type="checkbox" id="vysev-new-dodavatel-checkbox" onchange="toggleVysevNewDodavatel()">
+                    <label for="vysev-new-dodavatel-checkbox">Zadat nového dodavatele</label>
+                </div>
+
+                <div class="field-group hidden" id="group-vysev-dodavatel-input">
+                    <label for="vysev-dodavatel-new-input">Jméno nového dodavatele</label>
+                    <input type="text" id="vysev-dodavatel-new-input" placeholder="Zadej jméno dodavatele">
+                </div>
+
+                <div class="field-group">
+                    <label for="vysev-katalog-cislo-input">Katalogové číslo u dodavatele (nepovinné)</label>
+                    <input type="text" id="vysev-katalog-cislo-input" placeholder="např. 452.1">
+                </div>
+
+                <div class="field-group">
+                    <label for="vysev-pocet-input">Počet vysetých semen</label>
+                    <input type="number" id="vysev-pocet-input" min="1" value="20" required>
+                </div>
+
+                <div class="field-group">
+                    <label for="vysev-datum-input">Datum výsevu</label>
+                    <input type="date" id="vysev-datum-input" required>
+                </div>
+
+                <div class="field-group">
+                    <label for="vysev-poznamka-input">Poznámka (nepovinné)</label>
+                    <textarea id="vysev-poznamka-input"></textarea>
+                </div>
+
+                <div class="btn-container">
+                    <button type="button" class="btn-secondary" onclick="switchView('dashboard')">Zrušit</button>
+                    <button type="submit" class="btn-primary">Uložit výsev</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- FORMULÁŘ PRO NOVOU ROSTLINU -->
+        <div id="view-form-rostlina" class="card hidden">
+            <h2>Nová rostlina / akvizice</h2>
+            <div id="rostlina-limit-banner" class="hidden" style="font-size: 0.8rem; padding: 8px 12px; border-radius: 8px; margin-bottom: 14px; text-align: center;"></div>
+            <form id="form-rostlina-data" onsubmit="handleRostlinaSubmit(event)">
+
+                <div class="field-group">
+                    <label for="rostlina-akvizice-select">Typ akvizice</label>
+                    <select id="rostlina-akvizice-select" required>
+                        <option value="">Načítám akvizice...</option>
+                    </select>
+                </div>
+
+                <div class="field-group">
+                    <label for="rostlina-stav-select">Stav rostliny</label>
+                    <select id="rostlina-stav-select" onchange="toggleRostlinaStavFields()" required>
+                        <option value="">Načítám stavy...</option>
+                    </select>
+                </div>
+
+                <div class="field-group hidden" id="group-rostlina-podnoz">
+                    <label for="rostlina-podnoz-select">Podnož</label>
+                    <select id="rostlina-podnoz-select">
+                        <option value="">Načítám podnože...</option>
+                    </select>
+                </div>
+
+                <div class="field-group" id="group-rostlina-rod-select">
+                    <label for="rostlina-rod-select">Rod</label>
+                    <select id="rostlina-rod-select">
+                        <option value="">Načítám rody...</option>
+                    </select>
+                </div>
+
+                <div class="checkbox-group">
+                    <input type="checkbox" id="rostlina-new-rod-checkbox" onchange="toggleRostlinaNewRod()">
+                    <label for="rostlina-new-rod-checkbox">Zadat nový rod</label>
+                </div>
+
+                <div class="field-group hidden" id="group-rostlina-rod-input">
+                    <label for="rostlina-rod-new-input">Jméno nového rodu</label>
+                    <input type="text" id="rostlina-rod-new-input" placeholder="Zadej jméno nového rodu">
+                </div>
+
+                <div class="field-group">
+                    <label for="rostlina-druh-input">Druh</label>
+                    <input type="text" id="rostlina-druh-input" placeholder="např. hintonii" required>
+                </div>
+
+                <div class="field-group">
+                    <label for="rostlina-varieta-input">Varieta / Forma (nepovinné)</label>
+                    <input type="text" id="rostlina-varieta-input" placeholder="např. albiflora">
+                </div>
+
+                <div class="field-group">
+                    <label for="rostlina-polni-cislo-input">Polní číslo (nepovinné)</label>
+                    <input type="text" id="rostlina-polni-cislo-input" placeholder="např. SB 1234">
+                </div>
+
+                <div class="field-group" id="group-rostlina-dodavatel-select">
+                    <label for="rostlina-dodavatel-select">Dodavatel</label>
+                    <select id="rostlina-dodavatel-select">
+                        <option value="">Načítám dodavatele...</option>
+                    </select>
+                </div>
+
+                <div class="checkbox-group">
+                    <input type="checkbox" id="rostlina-new-dodavatel-checkbox" onchange="toggleRostlinaNewDodavatel()">
+                    <label for="rostlina-new-dodavatel-checkbox">Zadat nového dodavatele</label>
+                </div>
+
+                <div class="field-group hidden" id="group-rostlina-dodavatel-input">
+                    <label for="rostlina-dodavatel-new-input">Jméno nového dodavatele</label>
+                    <input type="text" id="rostlina-dodavatel-new-input" placeholder="Zadej jméno dodavatele">
+                </div>
+
+                <div class="field-group">
+                    <label for="rostlina-katalog-cislo-input">Katalogové číslo u dodavatele (nepovinné)</label>
+                    <input type="text" id="rostlina-katalog-cislo-input" placeholder="např. 452.1">
+                </div>
+
+                <div class="field-group">
+                    <label for="rostlina-pocet-input">Počet kusů</label>
+                    <input type="number" id="rostlina-pocet-input" min="1" value="1" required>
+                    <span style="font-size: 0.75rem; color: #718096; display: block; margin-top: 4px;">Při zadání více kusů se vytvoří tolik samostatných záznamů, každý s vlastním ID (stejně jako na desktopu).</span>
+                </div>
+
+                <div class="field-group">
+                    <label for="rostlina-datum-input">Datum pořízení</label>
+                    <input type="date" id="rostlina-datum-input" required>
+                </div>
+
+                <div class="field-group">
+                    <label for="rostlina-poznamka-input">Poznámka (nepovinné)</label>
+                    <textarea id="rostlina-poznamka-input"></textarea>
+                </div>
+
+                <div class="btn-container">
+                    <button type="button" class="btn-secondary" onclick="switchView('dashboard')">Zrušit</button>
+                    <button type="submit" class="btn-primary">Uložit rostlinu</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- SEZNAM A VYHLEDÁVÁNÍ ROSTLIN -->
+        <div id="view-list-rostliny" class="card hidden">
+            <h2>Katalog rostlin a výsevů</h2>
+
+            <!-- RYCHLÉ PŘEPÍNAČE REŽIMŮ -->
+            <div class="quick-filters-grid">
+                <button type="button" id="qf-vsechny" class="qf-btn" onclick="setQuickFilter('vsechny')">🌵 Všechny</button>
+                <button type="button" id="qf-zive" class="qf-btn active" onclick="setQuickFilter('zive')">🌿 Živé</button>
+                <button type="button" id="qf-archiv" class="qf-btn" onclick="setQuickFilter('archiv')">📦 Archiv</button>
+                <button type="button" id="qf-kos" class="qf-btn danger" onclick="setQuickFilter('kos')">🗑️ Koš</button>
+                <button type="button" class="qf-btn" onclick="resetAllFilters()" style="grid-column: span 2;">🔄 Zrušit filtry</button>
+            </div>
+
+            <div class="field-group">
+                <input type="text" id="search-input" placeholder="Hledat ID, rod, druh, varietu..." oninput="applyFilterAndSort()">
+            </div>
+
+            <div class="filter-row">
+                <div>
+                    <label for="sort-select">Řazení</label>
+                    <select id="sort-select" onchange="applyFilterAndSort()">
+                        <option value="id-desc">Nejnovější (ID ↓)</option>
+                        <option value="id-asc">Nejstarší (ID ↑)</option>
+                        <option value="alpha">Abecedně (Rod)</option>
+                        <option value="dodavatel">Podle dodavatele</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="status-filter">Stav</label>
+                    <select id="status-filter" onchange="applyFilterAndSort()">
+                        <option value="">Všechny stavy</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="filter-row">
+                <div>
+                    <label for="dodavatel-filter">Dodavatel</label>
+                    <select id="dodavatel-filter" onchange="applyFilterAndSort()">
+                        <option value="">Všichni dodavatelé</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="rostliny-container" style="max-height: 50vh; overflow-y: auto; margin-top: 10px;">
+                <p style="text-align: center; color: #718096;">Načítám rostliny...</p>
+            </div>
+
+            <!-- Vysypání koše - viditelné jen v zobrazení "Koš". Smaže natrvalo
+                 vše, co je v koši a nemá živého (netrashnutého) potomka - viz
+                 claude/sql_8_vyprazdni_kos.sql. -->
+            <div id="empty-trash-wrapper" class="hidden" style="margin-top: 12px;">
+                <button type="button" style="width: 100%; background-color: #c62828; color: white; border-color: #c62828;" onclick="handleEmptyTrash()">🗑️ Vysypat koš (trvale smazat vše výše)</button>
+            </div>
+
+            <div class="btn-container" style="margin-top: 16px;">
+                <button type="button" class="btn-secondary" onclick="switchView('dashboard')">🏠 Hlavní nabídka</button>
+            </div>
+        </div>
+
+        <!-- DETAIL ROSTLINY -->
+        <div id="view-detail-rostliny" class="card hidden">
+            <h2>Detail rostliny</h2>
+            <div id="detail-content"></div>
+
+            <!-- DENÍKOVÉ POZNÁMKY -->
+            <div id="poznamky-section" style="margin-top: 20px;">
+                <button type="button" class="accordion-btn" onclick="toggleAccordion('poznamky-list-wrapper')">
+                    <span>📝 Poznámky (<span id="poznamky-count">0</span>)</span> <span>▼</span>
+                </button>
+                <div id="poznamky-list-wrapper" class="hidden" style="border: 1px dashed var(--border-color); border-top: none; padding: 16px; border-radius: 0 0 8px 8px; background: #fafafa;">
+                    <div id="poznamky-list"></div>
+                </div>
+                <form id="form-poznamka" onsubmit="handlePoznamkaSubmit(event)" style="margin-top: 12px;">
+                    <div class="field-group">
+                        <textarea id="poznamka-novy-text" placeholder="Napiš poznámku k této rostlině (nepovinné)" required></textarea>
+                    </div>
+                    <button type="submit" class="btn-primary" style="width: 100%;">Přidat poznámku</button>
+                </form>
+            </div>
+
+            <!-- UNIVERZÁLNÍ AKCE PRO SPRÁVU ROSTLINY / VÝSEVU -->
+            <div id="plant-actions-container" style="margin-top: 20px;">
+
+                <!-- 1. AKORDEON: ÚPRAVA KLÍČENÍ (ZOBRAZÍ SE JEN U VÝSEVŮ) -->
+                <div id="wrapper-kliceni" class="hidden">
+                    <button type="button" class="accordion-btn" onclick="toggleAccordion('kliceni-section')">
+                        <span>🌱 Upravit / doplnit klíčení</span> <span>▼</span>
+                    </button>
+                    <div id="kliceni-section" class="hidden" style="border: 1px dashed var(--border-color); border-top: none; padding: 16px; border-radius: 0 0 8px 8px; background: #fafafa;">
+                        <form id="form-kliceni-data" onsubmit="handleKliceniSubmit(event)">
+                            <div class="field-group">
+                                <label for="kliceni-count-input">Nový celkový počet vyklíčených (Vyseto: <span id="kliceni-vyseto-max">0</span>)</label>
+                                <input type="number" id="kliceni-count-input" min="0" placeholder="Zadej nový počet" required>
+                                <span id="kliceni-hint" style="font-size: 0.75rem; color: #718096; display: block; margin-top: 4px;"></span>
+                            </div>
+                            <button type="submit" class="btn-primary" style="width: 100%;">Uložit nové klíčení</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 2. AKORDEON: ODDĚLENÍ SEMENÁČKŮ (ZOBRAZÍ SE JEN U VÝSEVŮ S KUSY) -->
+                <div id="wrapper-split" class="hidden">
+                    <button type="button" class="accordion-btn" onclick="toggleAccordion('split-section')">
+                        <span>🌿 Oddělení semenáčků</span> <span>▼</span>
+                    </button>
+                    <div id="split-section" class="hidden" style="border: 1px dashed var(--border-color); border-top: none; padding: 16px; border-radius: 0 0 8px 8px; background: #fafafa;">
+                        <div id="split-limit-banner" class="hidden" style="font-size: 0.8rem; padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; text-align: center;"></div>
+                        <form id="form-split-data" onsubmit="handleSplitSubmit(event)">
+                            <div class="field-group">
+                                <label for="split-count-input">Počet kusů k oddělení (Max. <span id="split-max-count">0</span>)</label>
+                                <input type="number" id="split-count-input" min="1" required>
+                            </div>
+
+                            <div class="field-group">
+                                <label for="split-stav-select">Stav nových rostlin</label>
+                                <select id="split-stav-select" onchange="toggleSplitStavFields()" required>
+                                    <option value="">Načítám stavy...</option>
+                                </select>
+                            </div>
+
+                            <div class="field-group hidden" id="group-split-podnoz">
+                                <label for="split-podnoz-select">Podnož</label>
+                                <select id="split-podnoz-select">
+                                    <option value="">Načítám podnože...</option>
+                                </select>
+                            </div>
+
+                            <div class="field-group">
+                                <label for="split-datum-input">Datum oddělení</label>
+                                <input type="date" id="split-datum-input" required>
+                                <span id="split-datum-hint" style="font-size: 0.75rem; color: #718096; display: block; margin-top: 4px;"></span>
+                            </div>
+
+                            <div class="field-group">
+                                <label for="split-poznamka-input">Poznámka k oddělení (nepovinné)</label>
+                                <textarea id="split-poznamka-input"></textarea>
+                            </div>
+
+                            <button type="submit" class="btn-accent" style="width: 100%;">Oddělit vybrané kusy</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 3. AKORDEON: PŘEROUBOVÁNÍ A ZMĚNA STAVU -->
+                <button type="button" class="accordion-btn" onclick="toggleAccordion('status-change-section')">
+                    <span>⚡ Změna stavu / Přeroubování</span> <span>▼</span>
+                </button>
+                <div id="status-change-section" class="hidden" style="border: 1px dashed var(--border-color); border-top: none; padding: 16px; border-radius: 0 0 8px 8px; background: #fafafa;">
+
+                    <div class="field-group" id="group-detail-graft">
+                        <label for="detail-graft-podnoz">Přeroubovat / Zvolit novou podnož</label>
+                        <select id="detail-graft-podnoz" onchange="handleDetailGraft(this.value)">
+                            <option value="">-- Vyber podnož pro přeroubování --</option>
+                        </select>
+                        <span style="font-size: 0.75rem; color: #718096; display: block; margin-top: 4px;">Výběr podnože změní stav na živou roubovanou, volba „Žádná“ rostlinu odroubuje (zpravokořenělá). Datum se ukládá jako dnešní den.</span>
+                    </div>
+
+                    <div class="field-group" style="margin-top: 16px; border-top: 1px solid #e2e8f0; padding-top: 12px;">
+                        <label for="detail-new-status">Změnit stav / evidovat úhyn či prodej</label>
+                        <select id="detail-new-status">
+                            <option value="">-- Vyber nový stav z číselníku --</option>
+                        </select>
+                        <!-- Datum změny stavu (sql_27): ukládá se do historie
+                             stavů (T_HistorieStavu.DatumZmeny), odkud ho čte
+                             i statistika "Ztráty podle příčiny". Výchozí je
+                             dnešek, jde zadat i zpětně (úhyn zjištěný
+                             později), ale ne dřív než datum výsevu/pořízení. -->
+                        <label for="detail-status-datum" style="margin-top: 10px;">Datum změny</label>
+                        <input type="date" id="detail-status-datum">
+                        <span id="detail-status-datum-hint" style="font-size: 0.75rem; color: #718096; display: block; margin-top: 4px;"></span>
+                        <button type="button" class="btn-primary" style="width: 100%; margin-top: 8px;" onclick="handleStatusChange()">Uložit nový stav</button>
+                    </div>
+
+                </div>
+
+                <!-- 4. AKORDEON: KOŠ / SMAZÁNÍ -->
+                <button type="button" class="accordion-btn" onclick="toggleAccordion('trash-section')">
+                    <span>🗑️ Koš / Smazání</span> <span>▼</span>
+                </button>
+                <div id="trash-section" class="hidden" style="border: 1px dashed var(--border-color); border-top: none; padding: 16px; border-radius: 0 0 8px 8px; background: #fafafa;">
+                    <div id="trash-section-content"></div>
+                </div>
+
+            </div>
+
+            <div class="btn-container" style="margin-top: 20px; display: flex; gap: 10px;">
+                <button type="button" class="btn-secondary" style="flex: 1;" onclick="switchView('list-rostliny')">🔍 Zpět na seznam</button>
+                <button type="button" class="btn-secondary" style="flex: 1;" onclick="switchView('dashboard')">🏠 Hlavní nabídka</button>
+            </div>
+        </div>
+
+        <!-- STATISTIKY -->
+        <div id="view-statistiky" class="card hidden">
+            <h2>📊 Statistiky sbírky</h2>
+
+            <div id="stat-locked" class="stat-empty" style="display: none;">
+                🔒 Statistiky jsou dostupné jen v placené verzi. Napiš nám, pokud by tě zajímal placený tarif.
+            </div>
+
+            <div id="stat-content">
+                <div class="stat-tiles">
+                    <div class="stat-tile">
+                        <div class="stat-tile-value" id="stat-souhrn-vyseto">-</div>
+                        <div class="stat-tile-label">Vyseto semen</div>
+                    </div>
+                    <div class="stat-tile">
+                        <div class="stat-tile-value" id="stat-souhrn-vyklic">-</div>
+                        <div class="stat-tile-label">Vyklíčeno</div>
+                    </div>
+                    <div class="stat-tile">
+                        <div class="stat-tile-value" id="stat-souhrn-uspesnost">-</div>
+                        <div class="stat-tile-label">Úspěšnost</div>
+                    </div>
+                </div>
+                <!-- Kolik výsevů zatím nemá zadané klíčení (a proto se do
+                     klíčivosti nepočítá) - vyplňuje loadStatistikyKlicivost(). -->
+                <p id="stat-souhrn-cekajici" class="stat-hint hidden" style="margin: -12px 0 16px 0;"></p>
+
+                <!-- Jednotlivé statistiky jsou schované v rozbalovacích lištách
+                     (stat-acc) - otevřená je vždy nejvýš jedna, viz
+                     toggleStatSekce(). Souhrnné dlaždice nahoře zůstávají
+                     vidět pořád. Data se načítají všechna hned při vstupu
+                     na obrazovku (loadStatistiky), rozbalení jen přepíná
+                     viditelnost - žádný další dotaz do databáze. -->
+                <div class="stat-acc" data-sekce="rod">
+                <button type="button" class="accordion-btn stat-acc-btn" onclick="toggleStatSekce('rod')">
+                    <span>🌱 Klíčivost podle rodu</span> <span class="stat-acc-chevron">▼</span>
+                </button>
+                <div class="stat-acc-body hidden">
+                <p class="stat-hint">Klepni na rod pro rozpad podle druhů a dodavatelů.</p>
+                <div id="stat-klicivost-rod"><p class="stat-empty">Načítám...</p></div>
+
+                <!-- Detailní (rozklikávací) panel - drill-down podle vybraného rodu/druhu,
+                     obdoba desktopových dotazů get_Detail_Druhu / get_Srovnani_Dodavatele /
+                     get_Druhy_Srovnani. Skryté, dokud uživatel neklikne na rod výše. -->
+                <div id="stat-detail-wrapper" class="hidden" style="margin: 10px 0 16px 0; padding: 12px; background: #f7faf7; border: 1px dashed var(--border-color); border-radius: 8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+                        <strong id="stat-detail-title" style="color: var(--primary);"></strong>
+                        <a onclick="closeStatDetail()" style="color: var(--primary); font-weight:600; cursor:pointer; font-size:0.85rem;">✕ Zavřít</a>
+                    </div>
+                    <div id="stat-detail-body"></div>
+                </div>
+                </div>
+                </div>
+
+                <div class="stat-acc" data-sekce="dodavatel">
+                <button type="button" class="accordion-btn stat-acc-btn" onclick="toggleStatSekce('dodavatel')">
+                    <span>📦 Klíčivost podle dodavatele</span> <span class="stat-acc-chevron">▼</span>
+                </button>
+                <div class="stat-acc-body hidden">
+                <div id="stat-klicivost-dodavatel"><p class="stat-empty">Načítám...</p></div>
+                </div>
+                </div>
+
+                <div class="stat-acc" data-sekce="ztraty">
+                <button type="button" class="accordion-btn stat-acc-btn" onclick="toggleStatSekce('ztraty')">
+                    <span>💀 Ztráty podle příčiny</span> <span class="stat-acc-chevron">▼</span>
+                </button>
+                <div class="stat-acc-body hidden">
+                <div id="stat-ztraty"><p class="stat-empty">Načítám...</p></div>
+                </div>
+                </div>
+
+                <div class="stat-acc" data-sekce="podnoze">
+                <button type="button" class="accordion-btn stat-acc-btn" onclick="toggleStatSekce('podnoze')">
+                    <span>🌵 Podnože (průměrný počet měsíců)</span> <span class="stat-acc-chevron">▼</span>
+                </button>
+                <div class="stat-acc-body hidden">
+                <div id="stat-podnoze"><p class="stat-empty">Načítám...</p></div>
+                </div>
+                </div>
+
+                <!-- Timeline akvizic (TODO "Další statistiky", 2026-09-22) - kolik
+                     nových záznamů přibylo po měsících ve zvoleném roce (nebo po
+                     letech při volbě "Všechny roky") a rozpad podle typu akvizice.
+                     Viz loadStatistikyAkvizice()/renderStatAkvizice() níže. -->
+                <div class="stat-acc" data-sekce="akvizice">
+                <button type="button" class="accordion-btn stat-acc-btn" onclick="toggleStatSekce('akvizice')">
+                    <span>📅 Akvizice v čase</span> <span class="stat-acc-chevron">▼</span>
+                </button>
+                <div class="stat-acc-body hidden">
+                <p class="stat-hint">Výsev se počítá jako jeden záznam bez ohledu na počet semen. Semenáčky oddělené z vlastních výsevů se nepočítají.</p>
+                <div class="field-group">
+                    <label for="stat-akvizice-rok">Období</label>
+                    <select id="stat-akvizice-rok" onchange="renderStatAkvizice()">
+                        <option value="">Načítám...</option>
+                    </select>
+                </div>
+                <p id="stat-akvizice-souhrn" class="stat-akvizice-souhrn"></p>
+                <div id="stat-akvizice-obdobi"><p class="stat-empty">Načítám...</p></div>
+                <h4 class="stat-detail-subtitle" style="margin-top: 16px;">Podle typu akvizice</h4>
+                <div id="stat-akvizice-typ"><p class="stat-empty">Načítám...</p></div>
+                </div>
+                </div>
+            </div>
+
+            <div class="btn-container" style="margin-top: 20px;">
+                <button type="button" class="btn-secondary" onclick="switchView('dashboard')">🏠 Hlavní nabídka</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://slxerdwaapngenulumgk.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNseGVyZHdhYXBuZ2VudWx1bWdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwNzM2NDcsImV4cCI6MjEwMjY0OTY0N30.8-c3_-E1Cay_5hed-uEAnhnaxWA8GiJg2HPcB93q1FM';
+
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        let allRostlinyCache = [];
+        let currentDetailItem = null;
+        let activeQuickFilter = 'zive';
+
+        // --- Přihlašování / odhlašování (Supabase Auth) ---
+        //
+        // Identita uživatele teď žije v podepsané session od Supabase Auth
+        // (auth.signInWithPassword), ne v localStorage. currentSession se
+        // drží jako lokální cache session objektu, ať getCurrentUserEmail()
+        // může fungovat synchronně ve stávajícím kódu appky.
+        // onAuthStateChange ji drží aktuální i po obnovení stránky
+        // (Supabase JS SDK session sama persistuje v localStorage pod svým
+        // vlastním klíčem a umí ji na pozadí obnovit/refreshnout).
+        let currentSession = null;
+
+        // Tarif přihlášeného uživatele ('free' / 'placeny'), načtený z
+        // T_Uzivatel.tarif spolu se jménem v showLoggedInUser(). Stejná
+        // (klientská) ochrana jako na desktopu - viz
+        // claude/navod_appsmith_skryti_statistik.md. Dokud se nenačte,
+        // je null a statistiky se chovají, jako by byly zamčené.
+        let currentUserTarif = null;
+
+                // --- Proaktivní upozornění na limit záznamů free tarifu ---
+        //
+        // Skutečné vynucení limitu je vždy na serveru (trigger na
+        // T_Rostliny). Tohle je jen informativní banner. Počet záznamů
+        // i samotný limit přicházejí z databáze (stav_limitu(), sql_33),
+        // takže číslo limitu je jen na jednom místě: limit_free_zaznamu().
+        let currentPocetZaznamu = null;
+        let currentLimitZaznamu = null;
+
+        async function refreshLimitInfo() {
+            if (currentUserTarif !== 'free') {
+                currentPocetZaznamu = null;
+                currentLimitZaznamu = null;
+                return;
+            }
+            try {
+                const { data, error } = await supabaseClient.rpc('stav_limitu');
+                if (error) throw error;
+                const r = Array.isArray(data) ? data[0] : data;
+                currentPocetZaznamu = (r && typeof r.pocet === 'number') ? r.pocet : null;
+                currentLimitZaznamu = (r && typeof r.limit_zaznamu === 'number') ? r.limit_zaznamu : null;
+            } catch (err) {
+                console.warn('Nepodařilo se načíst stav limitu záznamů:', err);
+                currentPocetZaznamu = null;
+                currentLimitZaznamu = null;
+            }
+        }
+
+        // Vykreslí banner do zadaného elementu. U placeného tarifu (nebo
+        // když se stav nepodařilo načíst) se banner schová.
+        function renderLimitBanner(elementId) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+
+            if (currentUserTarif !== 'free' || currentPocetZaznamu === null || currentLimitZaznamu === null) {
+                el.classList.add('hidden');
+                el.textContent = '';
+                return;
+            }
+
+            const limit = currentLimitZaznamu;
+            const zbyva = limit - currentPocetZaznamu;
+            el.classList.remove('hidden');
+
+            if (zbyva <= 0) {
+                el.style.backgroundColor = '#fdecea';
+                el.style.color = '#c62828';
+                el.style.border = '1px solid #f5c6cb';
+                el.textContent = `🔒 Dosáhli jste limitu ${limit} záznamů pro free tarif (aktuálně ${currentPocetZaznamu}). Nový záznam nejde uložit, dokud nějaký nesmažete nebo nepřejdete na placenou verzi.`;
+            } else if (zbyva <= 5) {
+                el.style.backgroundColor = '#fff8e1';
+                el.style.color = '#8d6e00';
+                el.style.border = '1px solid #ffe082';
+                el.textContent = `⚠️ Blížíte se limitu free tarifu: ${currentPocetZaznamu} / ${limit} záznamů (zbývá ${zbyva}).`;
+            } else {
+                el.style.backgroundColor = '#f1f8f2';
+                el.style.color = '#2e7d32';
+                el.style.border = '1px solid #c8e6c9';
+                el.textContent = `📊 ${currentPocetZaznamu} / ${limit} záznamů (free tarif).`;
+            }
+        }
+
+        // Dnešní datum ve formátu RRRR-MM-DD podle místního času zařízení
+        // (sql_40, 2026-09-24). Dřív se používalo new Date().toISOString(),
+        // což je UTC - po půlnoci českého času (do 1:00 v zimě / 2:00 v létě)
+        // to vracelo ještě včerejšek.
+        function dnesLokalne() {
+            const d = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        }
+
+        function getCurrentUserEmail() {
+            return currentSession?.user?.email || null;
+        }
+
+        // Zašedí dlaždici "Statistiky sbírky" na dashboardu a zablokuje na
+        // ní kliknutí, pokud přihlášený uživatel nemá placený tarif - ať
+        // nemusí kvůli tomu klikat dovnitř a zase zpátky (viz stejná
+        // kontrola v loadStatistiky()). Volá se po každém načtení tarifu
+        // a při vstupu na dashboard.
+        function updateStatistikyDashCard() {
+            const card = document.getElementById('dash-card-statistiky');
+            const text = document.getElementById('dash-card-statistiky-text');
+            if (!card || !text) return;
+
+            if (currentUserTarif === 'placeny') {
+                card.classList.remove('locked');
+                card.onclick = () => switchView('statistiky');
+                text.innerHTML = 'Klíčivost, ztráty a podnože tvé sbírky';
+            } else {
+                card.classList.add('locked');
+                card.onclick = null;
+                text.innerHTML = 'Klíčivost, ztráty a podnože tvé sbírky' +
+                    '<span class="dash-card-lock-note">🔒 Dostupné jen v placené verzi. Napiš nám, pokud by tě zajímal placený tarif.</span>';
+            }
+        }
+
+        // Detekce odkazu na obnovu hesla (Supabase Auth posílá uživatele
+        // zpátky na appku s type=recovery v URL hash, např.
+        // #access_token=...&type=recovery). Supabase JS SDK z toho udělá
+        // session a vyvolá PASSWORD_RECOVERY event v onAuthStateChange -
+        // appka na to zareaguje přepnutím na view-reset-password, ať
+        // uživatel může rovnou zadat nové heslo.
+        let awaitingPasswordRecovery = false;
+
+        async function initAuth() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            currentSession = session;
+
+            supabaseClient.auth.onAuthStateChange((event, session) => {
+                currentSession = session;
+                if (event === 'PASSWORD_RECOVERY') {
+                    awaitingPasswordRecovery = true;
+                    switchView('reset-password');
+                }
+            });
+
+            // Dej chvilku onAuthStateChange, ať případný PASSWORD_RECOVERY
+            // event z URL stihne appku přepnout dřív, než rozhodneme o
+            // výchozím pohledu podle session.
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            if (awaitingPasswordRecovery) {
+                return;
+            }
+
+            if (session) {
+                await showLoggedInUser(session.user.email);
+                switchView('dashboard');
+            } else {
+                switchView('login');
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initAuth();
+        });
+
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function formatPoznamkaDatum(isoString) {
+            if (!isoString) return '';
+            const d = new Date(isoString);
+            if (isNaN(d.getTime())) return isoString;
+            const pad = n => String(n).padStart(2, '0');
+            return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+
+        // Poznámky rostliny (sql_39): jediné místo pro poznámky je
+        // rostlina_poznamky. Každou jde upravit i smazat - přes funkce
+        // uprav_poznamku / smaz_poznamku, které ověří, že rostlina patří
+        // přihlášenému. Desktop používá stejné funkce, takže se obě appky
+        // chovají stejně.
+        let currentPoznamky = [];
+        let editingPoznamkaId = null;
+
+        function renderPoznamky(poznamky) {
+            currentPoznamky = poznamky || [];
+            const container = document.getElementById('poznamky-list');
+            if (!container) return;
+
+            const countEl = document.getElementById('poznamky-count');
+            if (countEl) countEl.textContent = currentPoznamky.length;
+
+            if (currentPoznamky.length === 0) {
+                container.innerHTML = '<div class="poznamka-empty">Zatím žádné poznámky.</div>';
+                return;
+            }
+
+            container.innerHTML = currentPoznamky.map(p => {
+                const meta = `${formatPoznamkaDatum(p.vytvoreno)} · ${escapeHtml(p.user_id || '')}`;
+                if (p.id === editingPoznamkaId) {
+                    return `
+                        <div class="poznamka-entry">
+                            <div class="poznamka-entry-meta">${meta}</div>
+                            <textarea id="poznamka-edit-text" class="poznamka-edit-textarea">${escapeHtml(p.text)}</textarea>
+                            <div class="poznamka-actions">
+                                <button type="button" class="poznamka-btn btn-primary" onclick="saveEditPoznamka(${p.id})">💾 Uložit</button>
+                                <button type="button" class="poznamka-btn" onclick="cancelEditPoznamka()">Zrušit</button>
+                            </div>
+                        </div>
+                    `;
+                }
+                return `
+                    <div class="poznamka-entry">
+                        <div class="poznamka-entry-meta">${meta}</div>
+                        <div class="poznamka-entry-text">${escapeHtml(p.text)}</div>
+                        <div class="poznamka-actions">
+                            <button type="button" class="poznamka-btn" onclick="startEditPoznamka(${p.id})">✏️ Upravit</button>
+                            <button type="button" class="poznamka-btn poznamka-btn-danger" onclick="handleDeletePoznamka(${p.id})">🗑️ Smazat</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function startEditPoznamka(id) {
+            editingPoznamkaId = id;
+            renderPoznamky(currentPoznamky);
+            const ta = document.getElementById('poznamka-edit-text');
+            if (ta) ta.focus();
+        }
+
+        function cancelEditPoznamka() {
+            editingPoznamkaId = null;
+            renderPoznamky(currentPoznamky);
+        }
+
+        async function saveEditPoznamka(id) {
+            const ta = document.getElementById('poznamka-edit-text');
+            const text = ta ? ta.value.trim() : '';
+            if (!text) {
+                alert('Poznámka nesmí být prázdná. Pokud ji nechceš, smaž ji.');
+                return;
+            }
+            const { error } = await supabaseClient.rpc('uprav_poznamku', {
+                p_poznamka_id: id,
+                p_text: text
+            });
+            if (error) {
+                alert('Poznámku se nepodařilo uložit: ' + error.message);
+                return;
+            }
+            editingPoznamkaId = null;
+            if (currentDetailItem) await loadPoznamky(currentDetailItem.RostlinaID);
+        }
+
+        async function handleDeletePoznamka(id) {
+            if (!confirm('Opravdu smazat tuhle poznámku? Zmizí i z desktopu.')) return;
+            const { error } = await supabaseClient.rpc('smaz_poznamku', {
+                p_poznamka_id: id
+            });
+            if (error) {
+                alert('Poznámku se nepodařilo smazat: ' + error.message);
+                return;
+            }
+            editingPoznamkaId = null;
+            if (currentDetailItem) await loadPoznamky(currentDetailItem.RostlinaID);
+        }
+
+        async function loadPoznamky(rostlinaId) {
+            editingPoznamkaId = null;
+            const { data, error } = await supabaseClient
+                .from('rostlina_poznamky')
+                .select('*')
+                .eq('rostlina_id', rostlinaId)
+                .order('vytvoreno', { ascending: false })
+                .order('id', { ascending: false });
+
+            if (error) {
+                console.error('Chyba při načítání poznámek:', error);
+                const container = document.getElementById('poznamky-list');
+                if (container) container.innerHTML = '<div class="poznamka-empty">Poznámky se nepodařilo načíst.</div>';
+                return;
+            }
+
+            renderPoznamky(data || []);
+        }
+
+        async function handlePoznamkaSubmit(event) {
+            event.preventDefault();
+
+            const userEmail = getCurrentUserEmail();
+            if (!userEmail) {
+                alert('Musíte být přihlášeni.');
+                switchView('login');
+                return;
+            }
+
+            if (!currentDetailItem || !currentDetailItem.RostlinaID) {
+                alert('Chyba: není vybraná žádná rostlina.');
+                return;
+            }
+
+            const textarea = document.getElementById('poznamka-novy-text');
+            const text = textarea.value.trim();
+            if (!text) return;
+
+            const submitBtn = event.target.querySelector('button[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+
+            try {
+                // Přidání přes funkci pridej_poznamku (sql_39) - stejná
+                // jako na desktopu, ověří vlastníka rostliny.
+                const { error } = await supabaseClient.rpc('pridej_poznamku', {
+                    p_rostlina_id: currentDetailItem.RostlinaID,
+                    p_text: text
+                });
+
+                if (error) {
+                    alert('Chyba při ukládání poznámky: ' + error.message);
+                    return;
+                }
+
+                textarea.value = '';
+                await loadPoznamky(currentDetailItem.RostlinaID);
+
+                const wrapper = document.getElementById('poznamky-list-wrapper');
+                if (wrapper) wrapper.classList.remove('hidden');
+            } finally {
+                if (submitBtn) submitBtn.disabled = false;
+            }
+        }
+
+        async function handleHlaseniChybySubmit(event) {
+            event.preventDefault();
+
+            const userEmail = getCurrentUserEmail();
+            if (!userEmail) {
+                alert('Musíte být přihlášeni.');
+                switchView('login');
+                return;
+            }
+
+            const textInput = document.getElementById('hlaseni-text-input');
+            const text = textInput.value.trim();
+            if (!text) return;
+
+            const typRadio = event.target.querySelector('input[name="hlaseni-typ"]:checked');
+            const typ = typRadio ? typRadio.value : 'chyba';
+
+            const kontext = document.getElementById('hlaseni-kontext-label').textContent;
+            const submitBtn = event.target.querySelector('button[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+
+            try {
+                const { error } = await supabaseClient
+                    .from('hlaseni_chyb')
+                    .insert([{
+                        user_id: userEmail,
+                        text: text,
+                        kontext: kontext,
+                        typ: typ
+                    }]);
+
+                if (error) {
+                    alert('Chyba při odesílání hlášení: ' + error.message);
+                    return;
+                }
+
+                alert('Díky! Hlášení bylo odesláno.');
+                switchView(lastActiveView === 'form-hlaseni-chyby' ? 'dashboard' : lastActiveView);
+            } catch (e) {
+                alert('Kritická chyba při odesílání hlášení:\n' + e.message);
+            } finally {
+                if (submitBtn) submitBtn.disabled = false;
+            }
+        }
+
+        async function showLoggedInUser(email) {
+            const label = document.getElementById('current-user-label');
+            if (!label) return;
+
+            // Zobraz e-mail hned, ať uživatel něco vidí i kdyby dotaz níže selhal.
+            label.textContent = email;
+
+            try {
+                const { data, error } = await supabaseClient
+                    .from('T_Uzivatel')
+                    .select('jmeno, tarif')
+                    .eq('email', email)
+                    .maybeSingle();
+
+                if (!error && data) {
+                    if (data.jmeno) label.textContent = data.jmeno;
+                    currentUserTarif = data.tarif || 'free';
+                } else {
+                    // Dotaz selhal (např. výpadek sítě) - bezpečnější je
+                    // chovat se jako u free tarifu, ne omylem odemknout.
+                    currentUserTarif = 'free';
+                }
+            } catch (err) {
+                console.warn('Nepodařilo se načíst jméno/tarif uživatele:', err);
+                currentUserTarif = 'free';
+            }
+
+            updateStatistikyDashCard();
+        }
+
+        async function handleLoginSubmit(event) {
+            event.preventDefault();
+
+            const emailInput = document.getElementById('login-email');
+            const heslaInput = document.getElementById('login-heslo');
+            const errorBox = document.getElementById('login-error');
+            const submitBtn = document.getElementById('login-submit-btn');
+
+            const email = emailInput.value.trim().toLowerCase();
+            const heslo = heslaInput.value;
+
+            errorBox.style.display = 'none';
+            errorBox.textContent = '';
+
+            if (!email || !heslo) {
+                errorBox.textContent = 'Vyplň prosím e-mail i heslo.';
+                errorBox.style.display = 'block';
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Přihlašuji...';
+
+            try {
+                const { data, error } = await supabaseClient.auth.signInWithPassword({
+                    email: email,
+                    password: heslo
+                });
+
+                if (error) throw error;
+
+                currentSession = data.session;
+
+                heslaInput.value = '';
+                errorBox.style.display = 'none';
+                await showLoggedInUser(data.user.email);
+                switchView('dashboard');
+            } catch (err) {
+                console.error('Chyba při přihlašování:', err);
+                // Supabase Auth vrací obecnou chybu "Invalid login credentials"
+                // pro špatný e-mail i heslo (schválně, kvůli bezpečnosti).
+                errorBox.textContent = 'Nesprávný e-mail nebo heslo.';
+                errorBox.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Přihlásit se';
+            }
+        }
+
+        // --- Zapomenuté heslo / obnova hesla ---
+        async function handleForgotPasswordSubmit(event) {
+            event.preventDefault();
+
+            const emailInput = document.getElementById('forgot-email');
+            const errorBox = document.getElementById('forgot-password-error');
+            const successBox = document.getElementById('forgot-password-success');
+            const submitBtn = document.getElementById('forgot-password-submit-btn');
+
+            const email = emailInput.value.trim().toLowerCase();
+
+            errorBox.style.display = 'none';
+            errorBox.textContent = '';
+            successBox.style.display = 'none';
+            successBox.textContent = '';
+
+            if (!email) {
+                errorBox.textContent = 'Vyplň prosím e-mail.';
+                errorBox.style.display = 'block';
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Odesílám...';
+
+            try {
+                // redirectTo musí sedět s adresou, na které appka běží -
+                // Supabase po kliknutí na odkaz v e-mailu přesměruje sem
+                // s parametry pro obnovu hesla v URL hash, initAuth() to
+                // pozná přes PASSWORD_RECOVERY event (viz výše).
+                const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+                    redirectTo: window.location.origin + window.location.pathname
+                });
+
+                if (error) throw error;
+
+                // Schválně stejná zpráva bez ohledu na to, jestli e-mail
+                // v systému existuje - ať appka neprozrazuje, které
+                // e-maily jsou zaregistrované.
+                successBox.textContent = 'Pokud je tenhle e-mail zaregistrovaný, poslali jsme na něj odkaz pro nastavení nového hesla. Zkontroluj si i spam.';
+                successBox.style.display = 'block';
+                event.target.reset();
+            } catch (err) {
+                console.error('Chyba při žádosti o obnovu hesla:', err);
+                errorBox.textContent = 'Něco se nepovedlo, zkus to prosím znovu: ' + err.message;
+                errorBox.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Odeslat odkaz na obnovu hesla';
+            }
+        }
+
+        async function handleResetPasswordSubmit(event) {
+            event.preventDefault();
+
+            const heslo1 = document.getElementById('reset-heslo-1').value;
+            const heslo2 = document.getElementById('reset-heslo-2').value;
+            const errorBox = document.getElementById('reset-password-error');
+            const submitBtn = document.getElementById('reset-password-submit-btn');
+
+            errorBox.style.display = 'none';
+            errorBox.textContent = '';
+
+            if (heslo1.length < 8) {
+                errorBox.textContent = 'Heslo musí mít alespoň 8 znaků.';
+                errorBox.style.display = 'block';
+                return;
+            }
+            if (heslo1 !== heslo2) {
+                errorBox.textContent = 'Hesla se neshodují.';
+                errorBox.style.display = 'block';
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Ukládám...';
+
+            try {
+                const { data, error } = await supabaseClient.auth.updateUser({ password: heslo1 });
+                if (error) throw error;
+
+                awaitingPasswordRecovery = false;
+                currentSession = data.session || currentSession;
+                alert('Heslo bylo úspěšně nastaveno. Jsi přihlášen(a).');
+
+                if (currentSession && currentSession.user) {
+                    await showLoggedInUser(currentSession.user.email);
+                    switchView('dashboard');
+                } else {
+                    switchView('login');
+                }
+            } catch (err) {
+                console.error('Chyba při nastavování nového hesla:', err);
+                errorBox.textContent = 'Nepodařilo se uložit nové heslo: ' + err.message;
+                errorBox.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Uložit nové heslo';
+            }
+        }
+
+        // --- Registrace ---
+        async function handleRegisterSubmit(event) {
+            event.preventDefault();
+
+            const jmeno = document.getElementById('register-jmeno').value.trim();
+            const email = document.getElementById('register-email').value.trim().toLowerCase();
+            const heslo1 = document.getElementById('register-heslo-1').value;
+            const heslo2 = document.getElementById('register-heslo-2').value;
+            const errorBox = document.getElementById('register-error');
+            const submitBtn = document.getElementById('register-submit-btn');
+
+            errorBox.style.display = 'none';
+            errorBox.textContent = '';
+
+            if (!jmeno || !email) {
+                errorBox.textContent = 'Vyplň prosím jméno i e-mail.';
+                errorBox.style.display = 'block';
+                return;
+            }
+            if (heslo1.length < 8) {
+                errorBox.textContent = 'Heslo musí mít alespoň 8 znaků.';
+                errorBox.style.display = 'block';
+                return;
+            }
+            if (heslo1 !== heslo2) {
+                errorBox.textContent = 'Hesla se neshodují.';
+                errorBox.style.display = 'block';
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Vytvářím účet...';
+
+            try {
+                // T_Uzivatel profil se založí automaticky přes DB trigger
+                // on_auth_user_created (claude/sql_42_registrace_trigger.sql) -
+                // appka po registraci nemusí nic dalšího zapisovat.
+                const { data, error } = await supabaseClient.auth.signUp({
+                    email: email,
+                    password: heslo1,
+                    options: {
+                        data: { jmeno: jmeno }
+                    }
+                });
+
+                if (error) throw error;
+
+                event.target.reset();
+
+                if (data.session) {
+                    // Potvrzení e-mailu je v projektu vypnuté (nebo uživatel
+                    // je rovnou přihlášen) - appka ho pustí přímo dovnitř.
+                    currentSession = data.session;
+                    await showLoggedInUser(data.user.email);
+                    switchView('dashboard');
+                } else {
+                    alert('Účet byl vytvořen! Zkontroluj si e-mail a potvrď registraci, pak se můžeš přihlásit.');
+                    switchView('login');
+                }
+            } catch (err) {
+                console.error('Chyba při registraci:', err);
+                if (err.message && err.message.toLowerCase().includes('already registered')) {
+                    errorBox.textContent = 'Tenhle e-mail už je zaregistrovaný. Zkus se přihlásit, nebo použij Zapomenuté heslo.';
+                } else {
+                    errorBox.textContent = 'Registraci se nepodařilo dokončit: ' + err.message;
+                }
+                errorBox.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Vytvořit účet';
+            }
+        }
+
+        // --- Nastavení účtu: změna hesla, smazání účtu ---
+        async function handleChangePasswordSubmit(event) {
+            event.preventDefault();
+
+            const heslo1 = document.getElementById('change-heslo-1').value;
+            const heslo2 = document.getElementById('change-heslo-2').value;
+            const errorBox = document.getElementById('change-password-error');
+            const successBox = document.getElementById('change-password-success');
+            const submitBtn = document.getElementById('change-password-submit-btn');
+
+            errorBox.style.display = 'none';
+            errorBox.textContent = '';
+            successBox.style.display = 'none';
+            successBox.textContent = '';
+
+            if (heslo1.length < 8) {
+                errorBox.textContent = 'Heslo musí mít alespoň 8 znaků.';
+                errorBox.style.display = 'block';
+                return;
+            }
+            if (heslo1 !== heslo2) {
+                errorBox.textContent = 'Hesla se neshodují.';
+                errorBox.style.display = 'block';
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Ukládám...';
+
+            try {
+                const { error } = await supabaseClient.auth.updateUser({ password: heslo1 });
+                if (error) throw error;
+
+                successBox.textContent = 'Heslo bylo úspěšně změněno.';
+                successBox.style.display = 'block';
+                event.target.reset();
+            } catch (err) {
+                console.error('Chyba při změně hesla:', err);
+                errorBox.textContent = 'Heslo se nepodařilo změnit: ' + err.message;
+                errorBox.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Změnit heslo';
+            }
+        }
+
+        async function handleDeleteAccountClick() {
+            const userEmail = getCurrentUserEmail();
+            if (!userEmail) {
+                switchView('login');
+                return;
+            }
+
+            if (!confirm(`Opravdu chceš TRVALE smazat účet ${userEmail}?\n\nZmizí všechny tvoje rostliny, výsevy, poznámky i samotný uživatelský účet. Tohle nejde vzít zpět.`)) {
+                return;
+            }
+            const potvrzeni = prompt('Pro trvalé smazání účtu napiš slovo "smazat" (bez uvozovek):');
+            if (potvrzeni === null) {
+                return; // uživatel klikl na Zrušit
+            }
+            if (potvrzeni.trim().toLowerCase() !== 'smazat') {
+                alert('Zadané slovo nesouhlasí, účet nebyl smazán.');
+                return;
+            }
+
+            try {
+                // Sebeobslužné smazání účtu (GDPR) - jedna atomická
+                // operace na serveru, viz claude/sql_43_smaz_muj_ucet.sql.
+                // Smaže všechna data i auth.users, hlášení chyb jen
+                // anonymizuje (user_id = null).
+                const { error } = await supabaseClient.rpc('smaz_muj_ucet');
+                if (error) throw error;
+
+                alert('Účet byl smazán. Sbohem a ať se sbírce daří!');
+                currentSession = null;
+                currentUserTarif = null;
+                allRostlinyCache = [];
+                currentDetailItem = null;
+                await supabaseClient.auth.signOut();
+                switchView('login');
+            } catch (err) {
+                console.error('Chyba při mazání účtu:', err);
+                alert('Účet se nepodařilo smazat: ' + err.message);
+            }
+        }
+
+        async function handleLogout() {
+            await supabaseClient.auth.signOut();
+            currentSession = null;
+            currentUserTarif = null;
+            allRostlinyCache = [];
+            currentDetailItem = null;
+
+            const loginForm = document.getElementById('form-login');
+            if (loginForm) loginForm.reset();
+            const errorBox = document.getElementById('login-error');
+            if (errorBox) errorBox.style.display = 'none';
+
+            switchView('login');
+        }
+
+        let lastActiveView = 'dashboard';
+
+        function switchView(viewName) {
+            if (viewName !== 'form-hlaseni-chyby' && viewName !== 'login') {
+                lastActiveView = viewName;
+            }
+
+            document.getElementById('view-login').classList.add('hidden');
+            document.getElementById('view-forgot-password').classList.add('hidden');
+            document.getElementById('view-reset-password').classList.add('hidden');
+            document.getElementById('view-register').classList.add('hidden');
+            document.getElementById('view-dashboard').classList.add('hidden');
+            document.getElementById('view-nastaveni').classList.add('hidden');
+            document.getElementById('view-form-vysev').classList.add('hidden');
+            document.getElementById('view-form-rostlina').classList.add('hidden');
+            document.getElementById('view-list-rostliny').classList.add('hidden');
+            document.getElementById('view-detail-rostliny').classList.add('hidden');
+            document.getElementById('view-form-hlaseni-chyby').classList.add('hidden');
+            document.getElementById('view-statistiky').classList.add('hidden');
+
+            const today = dnesLokalne();
+
+            // Pohledy dostupné i bez přihlášení (přihlášení, registrace,
+            // zapomenuté/obnova hesla) - musí jít otevřít dřív, než appka
+            // dole zkontroluje getCurrentUserEmail().
+            if (viewName === 'login') {
+                document.getElementById('view-login').classList.remove('hidden');
+                return;
+            } else if (viewName === 'forgot-password') {
+                document.getElementById('forgot-password-error').style.display = 'none';
+                document.getElementById('forgot-password-success').style.display = 'none';
+                document.getElementById('view-forgot-password').classList.remove('hidden');
+                return;
+            } else if (viewName === 'reset-password') {
+                document.getElementById('reset-password-error').style.display = 'none';
+                document.getElementById('view-reset-password').classList.remove('hidden');
+                return;
+            } else if (viewName === 'register') {
+                document.getElementById('register-error').style.display = 'none';
+                document.getElementById('view-register').classList.remove('hidden');
+                return;
+            } else if (!getCurrentUserEmail()) {
+                // Bez přihlášení nelze zobrazit žádný jiný pohled.
+                document.getElementById('view-login').classList.remove('hidden');
+                return;
+            } else if (viewName === 'dashboard') {
+                document.getElementById('view-dashboard').classList.remove('hidden');
+                updateStatistikyDashCard();
+
+                const searchInput = document.getElementById('search-input');
+                const statusFilter = document.getElementById('status-filter');
+                const dodavatelFilter = document.getElementById('dodavatel-filter');
+
+                if (searchInput) searchInput.value = '';
+                if (statusFilter) statusFilter.value = '';
+                if (dodavatelFilter) dodavatelFilter.value = '';
+                activeQuickFilter = 'zive';
+                ['vsechny', 'zive', 'archiv', 'kos'].forEach(f => {
+                    const btn = document.getElementById(`qf-${f}`);
+                    if (btn) btn.classList.toggle('active', f === 'zive');
+                });
+                refreshLimitInfo().then(() => renderLimitBanner('tarif-limit-banner'));
+            } else if (viewName === 'nastaveni') {
+                document.getElementById('view-nastaveni').classList.remove('hidden');
+                const f1 = document.getElementById('form-change-password');
+                if (f1) f1.reset();
+                document.getElementById('change-password-error').style.display = 'none';
+                document.getElementById('change-password-success').style.display = 'none';
+            } else if (viewName === 'form-vysev') {
+                document.getElementById('view-form-vysev').classList.remove('hidden');
+
+                document.getElementById('vysev-new-rod-checkbox').checked = false;
+                document.getElementById('vysev-new-dodavatel-checkbox').checked = false;
+                toggleVysevNewRod();
+                toggleVysevNewDodavatel();
+
+                const dateInput = document.getElementById('vysev-datum-input');
+                dateInput.value = today;
+                dateInput.max = today;
+
+                loadRodyOptions('vysev-rod-select');
+                loadDodavateléOptions('vysev-dodavatel-select');
+                refreshLimitInfo().then(() => renderLimitBanner('vysev-limit-banner'));
+            } else if (viewName === 'form-rostlina') {
+                document.getElementById('view-form-rostlina').classList.remove('hidden');
+
+                document.getElementById('rostlina-new-rod-checkbox').checked = false;
+                document.getElementById('rostlina-new-dodavatel-checkbox').checked = false;
+                toggleRostlinaNewRod();
+                toggleRostlinaNewDodavatel();
+
+                const dateInput = document.getElementById('rostlina-datum-input');
+                dateInput.value = today;
+                dateInput.max = today;
+
+                loadRodyOptions('rostlina-rod-select');
+                loadDodavateléOptions('rostlina-dodavatel-select');
+                loadPodnozeOptions();
+                loadAkviziceOptions();
+                refreshLimitInfo().then(() => renderLimitBanner('rostlina-limit-banner'));
+                loadStavOptions();
+            } else if (viewName === 'list-rostliny') {
+                document.getElementById('view-list-rostliny').classList.remove('hidden');
+                loadRostlinyData();
+            } else if (viewName === 'detail-rostlina') {
+                document.getElementById('view-detail-rostliny').classList.remove('hidden');
+            } else if (viewName === 'form-hlaseni-chyby') {
+                document.getElementById('view-form-hlaseni-chyby').classList.remove('hidden');
+                document.getElementById('hlaseni-text-input').value = '';
+                document.getElementById('hlaseni-kontext-label').textContent = lastActiveView;
+                const defaultTypRadio = document.querySelector('input[name="hlaseni-typ"][value="chyba"]');
+                if (defaultTypRadio) defaultTypRadio.checked = true;
+            } else if (viewName === 'statistiky') {
+                document.getElementById('view-statistiky').classList.remove('hidden');
+                loadStatistiky();
+            }
+        }
+
+        function setQuickFilter(filterName) {
+            activeQuickFilter = filterName;
+
+            ['vsechny', 'zive', 'archiv', 'kos'].forEach(f => {
+                const btn = document.getElementById(`qf-${f}`);
+                if (btn) {
+                    if (f === filterName) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                }
+            });
+
+            const emptyTrashWrapper = document.getElementById('empty-trash-wrapper');
+            if (emptyTrashWrapper) emptyTrashWrapper.classList.toggle('hidden', filterName !== 'kos');
+
+            applyFilterAndSort();
+        }
+
+        function resetAllFilters() {
+            document.getElementById('search-input').value = '';
+            document.getElementById('status-filter').value = '';
+            document.getElementById('dodavatel-filter').value = '';
+            document.getElementById('sort-select').value = 'id-desc';
+            setQuickFilter('vsechny');
+        }
+
+        function toggleAccordion(sectionId) {
+            const section = document.getElementById(sectionId);
+            if (section.classList.contains('hidden')) {
+                section.classList.remove('hidden');
+            } else {
+                section.classList.add('hidden');
+            }
+        }
+
+        // --- PŘEPÍNAČE PRO VÝSEV ---
+        function toggleVysevNewRod() {
+            const isChecked = document.getElementById('vysev-new-rod-checkbox').checked;
+            const selectGroup = document.getElementById('group-vysev-rod-select');
+            const inputGroup = document.getElementById('group-vysev-rod-input');
+            const selectElem = document.getElementById('vysev-rod-select');
+            const inputElem = document.getElementById('vysev-rod-new-input');
+
+            if (isChecked) {
+                selectGroup.classList.add('hidden');
+                inputGroup.classList.remove('hidden');
+                selectElem.removeAttribute('required');
+                inputElem.setAttribute('required', 'true');
+                selectElem.value = "";
+            } else {
+                selectGroup.classList.remove('hidden');
+                inputGroup.classList.add('hidden');
+                selectElem.setAttribute('required', 'true');
+                inputElem.removeAttribute('required');
+                inputElem.value = "";
+            }
+        }
+
+        function toggleVysevNewDodavatel() {
+            const isChecked = document.getElementById('vysev-new-dodavatel-checkbox').checked;
+            const selectGroup = document.getElementById('group-vysev-dodavatel-select');
+            const inputGroup = document.getElementById('group-vysev-dodavatel-input');
+            const selectElem = document.getElementById('vysev-dodavatel-select');
+            const inputElem = document.getElementById('vysev-dodavatel-new-input');
+
+            if (isChecked) {
+                selectGroup.classList.add('hidden');
+                inputGroup.classList.remove('hidden');
+                selectElem.removeAttribute('required');
+                inputElem.setAttribute('required', 'true');
+                selectElem.value = "";
+            } else {
+                selectGroup.classList.remove('hidden');
+                inputGroup.classList.add('hidden');
+                selectElem.setAttribute('required', 'true');
+                inputElem.removeAttribute('required');
+                inputElem.value = "";
+            }
+        }
+
+        // --- PŘEPÍNAČE PRO ROSTLINU ---
+        function toggleRostlinaNewRod() {
+            const isChecked = document.getElementById('rostlina-new-rod-checkbox').checked;
+            const selectGroup = document.getElementById('group-rostlina-rod-select');
+            const inputGroup = document.getElementById('group-rostlina-rod-input');
+            const selectElem = document.getElementById('rostlina-rod-select');
+            const inputElem = document.getElementById('rostlina-rod-new-input');
+
+            if (isChecked) {
+                selectGroup.classList.add('hidden');
+                inputGroup.classList.remove('hidden');
+                selectElem.removeAttribute('required');
+                inputElem.setAttribute('required', 'true');
+                selectElem.value = "";
+            } else {
+                selectGroup.classList.remove('hidden');
+                inputGroup.classList.add('hidden');
+                selectElem.setAttribute('required', 'true');
+                inputElem.removeAttribute('required');
+                inputElem.value = "";
+            }
+        }
+
+        function toggleRostlinaNewDodavatel() {
+            const isChecked = document.getElementById('rostlina-new-dodavatel-checkbox').checked;
+            const selectGroup = document.getElementById('group-rostlina-dodavatel-select');
+            const inputGroup = document.getElementById('group-rostlina-dodavatel-input');
+            const selectElem = document.getElementById('rostlina-dodavatel-select');
+            const inputElem = document.getElementById('rostlina-dodavatel-new-input');
+
+            if (isChecked) {
+                selectGroup.classList.add('hidden');
+                inputGroup.classList.remove('hidden');
+                selectElem.removeAttribute('required');
+                inputElem.setAttribute('required', 'true');
+                selectElem.value = "";
+            } else {
+                selectGroup.classList.remove('hidden');
+                inputGroup.classList.add('hidden');
+                selectElem.setAttribute('required', 'true');
+                inputElem.removeAttribute('required');
+                inputElem.value = "";
+            }
+        }
+
+        function toggleRostlinaStavFields() {
+            const stav = document.getElementById('rostlina-stav-select').value.toLowerCase();
+            const groupPodnoz = document.getElementById('group-rostlina-podnoz');
+            const selectPodnoz = document.getElementById('rostlina-podnoz-select');
+
+            if (stav.includes('roub')) {
+                groupPodnoz.classList.remove('hidden');
+                selectPodnoz.setAttribute('required', 'true');
+            } else {
+                groupPodnoz.classList.add('hidden');
+                selectPodnoz.removeAttribute('required');
+                selectPodnoz.value = "";
+            }
+        }
+
+        function toggleSplitStavFields() {
+            const stav = document.getElementById('split-stav-select').value.toLowerCase();
+            const groupPodnoz = document.getElementById('group-split-podnoz');
+            const selectPodnoz = document.getElementById('split-podnoz-select');
+
+            if (stav.includes('roub')) {
+                if (groupPodnoz) groupPodnoz.classList.remove('hidden');
+                if (selectPodnoz) selectPodnoz.setAttribute('required', 'true');
+            } else {
+                if (groupPodnoz) groupPodnoz.classList.add('hidden');
+                if (selectPodnoz) {
+                    selectPodnoz.removeAttribute('required');
+                    selectPodnoz.value = "";
+                }
+            }
+        }
+
+        // --- NAČÍTÁNÍ ČÍSELNÍKŮ ---
+        async function loadRodyOptions(elementId) {
+            const selectElement = document.getElementById(elementId);
+            selectElement.innerHTML = '<option value="">Načítám rody...</option>';
+            try {
+                const { data, error } = await supabaseClient.from('T_Rod').select('RodID, JmenoRodu').order('JmenoRodu', { ascending: true });
+                if (error) throw error;
+                selectElement.innerHTML = '<option value="">-- Vyber rod --</option>';
+                data.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = item.RodID;
+                    option.textContent = item.JmenoRodu;
+                    selectElement.appendChild(option);
+                });
+            } catch (err) {
+                console.error('Chyba při načítání rodů:', err);
+                selectElement.innerHTML = '<option value="">Chyba načítání</option>';
+            }
+        }
+
+        async function loadDodavateléOptions(elementId) {
+            const selectElement = document.getElementById(elementId);
+            selectElement.innerHTML = '<option value="">Načítám dodavatele...</option>';
+            try {
+                const { data, error } = await supabaseClient.from('T_Dodavatel').select('DodavatelID, JmenoDodavatele').order('JmenoDodavatele', { ascending: true });
+                if (error) throw error;
+                selectElement.innerHTML = '<option value="">-- Vyber dodavatele --</option>';
+                data.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = item.DodavatelID;
+                    option.textContent = item.JmenoDodavatele;
+                    selectElement.appendChild(option);
+                });
+            } catch (err) {
+                console.error('Chyba při načítání dodavatelů:', err);
+                selectElement.innerHTML = '<option value="">Chyba načítání</option>';
+            }
+        }
+
+        async function loadPodnozeOptions() {
+            const selects = ['rostlina-podnoz-select', 'split-podnoz-select', 'detail-graft-podnoz'];
+            selects.forEach(async (id) => {
+                const selectElement = document.getElementById(id);
+                if (!selectElement) return;
+                selectElement.innerHTML = '<option value="">Načítám podnože...</option>';
+                try {
+                    const { data, error } = await supabaseClient.from('podnoze_ciselnik').select('id, nazev').order('id', { ascending: true });
+                    if (error) throw error;
+                    selectElement.innerHTML = (id === 'detail-graft-podnoz') ? '<option value="">-- Vyber podnož pro přeroubování --</option>' : '<option value="">-- Vyber podnož --</option>';
+                    data.forEach(item => {
+                        const option = document.createElement('option');
+                        option.value = item.nazev;
+                        option.textContent = item.nazev;
+                        selectElement.appendChild(option);
+                    });
+                } catch (err) {
+                    console.error('Chyba při načítání podnoží:', err);
+                    selectElement.innerHTML = '<option value="">Chyba načítání</option>';
+                }
+            });
+        }
+
+        async function loadAkviziceOptions() {
+            const selectElement = document.getElementById('rostlina-akvizice-select');
+            selectElement.innerHTML = '<option value="">Načítám akvizice...</option>';
+            try {
+                const { data, error } = await supabaseClient.from('T_TypAkvizice').select('Nazev').order('TypAkviziceID', { ascending: true });
+                if (error) throw error;
+
+                selectElement.innerHTML = '<option value="">-- Vyber typ akvizice --</option>';
+                data.forEach(item => {
+                    const nazevLower = item.Nazev ? item.Nazev.toLowerCase().trim() : '';
+                    if (nazevLower === 'výsev' || (nazevLower.includes('výsev') && !nazevLower.includes('minulý'))) {
+                        return;
+                    }
+                    const option = document.createElement('option');
+                    option.value = item.Nazev;
+                    option.textContent = item.Nazev;
+                    if (item.Nazev === 'Rostlina') option.selected = true;
+                    selectElement.appendChild(option);
+                });
+            } catch (err) {
+                console.error('Chyba při načítání akvizic:', err);
+                selectElement.innerHTML = '<option value="">Chyba načítání</option>';
+            }
+        }
+
+        // Oddělení semenáčků z výsevu vždycky vytváří živou rostlinu -
+        // volí se jen způsob zakořenění, ne osud rostliny (ten se řeší
+        // později přes "Změnit stav"). Natvrdo omezeno na tyhle dva
+        // stavy - je to pevné pravidlo procesu, ne něco pro číselník.
+        const STAVY_PRO_ODDELENI = ['Živá – pravokořenná', 'Živá – roubovaná'];
+
+        // Názvy stavů, které appka nastavuje sama při zadání klíčení
+        // (handleKliceniSubmit) - musí sedět přesně s T_Stav.Nazev.
+        const STAV_VYSEV_SELHAL = 'Výsev selhal';
+        const STAV_VYSETO = 'Vyseto';
+
+        async function loadStavOptions(jeVysevKontext = false) {
+            // jeVysevKontext: true jen když měníme stav u dosud nerozděleného
+            // výsevu (showDetail to pozná přes isVysev) - pak se v dropdownu
+            // "Změnit stav" (detail-new-status) skryjí stavy, které dávají
+            // smysl jen u jednotlivé rostliny (Živá - pravokořenná/roubovaná/
+            // zpravokořenělá), viz T_Stav.PlatiProVysev.
+            //
+            // "Nová rostlina" filtruje přes PlatiProNovouRostlinu - Vyseto/
+            // Výsev selhal/Archivováno nedávají smysl jako počáteční stav
+            // nově zadávané jednotlivé rostliny/akvizice.
+            const selects = [
+                { id: 'rostlina-stav-select', defaultVal: 'Živá – pravokořenná', filterNovaRostlina: true },
+                { id: 'split-stav-select', defaultVal: 'Živá – pravokořenná', onlyNazvy: STAVY_PRO_ODDELENI },
+                // Vyseto se tu vyřazuje vždy - "Změnit stav" má sloužit ke
+                // skutečné změně (úhyn, prodej, výsev selhal...), ne k
+                // nastavení stavu, ve kterém záznam už beztak je.
+                // "Živá – roubovaná" se nastavuje přeroubováním (vyžaduje
+                // podnož) - funkce zmen_stav() ji odmítne, viz sql_27.
+                { id: 'detail-new-status', defaultVal: '', filterVysev: jeVysevKontext, excludeNazvy: ['Vyseto', 'Živá – roubovaná'] }
+            ];
+
+            selects.forEach(async (sel) => {
+                const selectElement = document.getElementById(sel.id);
+                if (!selectElement) return;
+                selectElement.innerHTML = '<option value="">Načítám stavy...</option>';
+                try {
+                    let query = supabaseClient.from('T_Stav').select('StavID, Nazev, PlatiProVysev, PlatiProNovouRostlinu').order('PoradiZobrazeni', { ascending: true });
+                    if (sel.filterVysev) {
+                        query = query.eq('PlatiProVysev', true);
+                    }
+                    if (sel.filterNovaRostlina) {
+                        query = query.eq('PlatiProNovouRostlinu', true);
+                    }
+                    if (sel.onlyNazvy) {
+                        query = query.in('Nazev', sel.onlyNazvy);
+                    }
+                    if (sel.excludeNazvy) {
+                        // Hodnoty v uvozovkách - názvy stavů obsahují mezery
+                        // a pomlčky, které PostgREST v in-seznamu bez
+                        // uvozovek nemusí přečíst správně.
+                        const seznam = sel.excludeNazvy.map(n => `"${n}"`).join(',');
+                        query = query.not('Nazev', 'in', `(${seznam})`);
+                    }
+                    const { data, error } = await query;
+                    if (error) throw error;
+                    selectElement.innerHTML = (sel.id === 'detail-new-status') ? '<option value="">-- Vyber nový stav z číselníku --</option>' : '<option value="">-- Vyber stav --</option>';
+                    data.forEach(item => {
+                        const option = document.createElement('option');
+                        option.value = item.Nazev;
+                        option.textContent = item.Nazev;
+                        if (item.Nazev === sel.defaultVal) option.selected = true;
+                        selectElement.appendChild(option);
+                    });
+                    if (sel.id === 'rostlina-stav-select') toggleRostlinaStavFields();
+                    if (sel.id === 'split-stav-select') toggleSplitStavFields();
+                } catch (err) {
+                    console.error('Chyba při načítání stavů:', err);
+                    selectElement.innerHTML = '<option value="">Chyba načítání</option>';
+                }
+            });
+        }
+
+        async function resolveRodId(isNewCheckboxId, newTextId, selectId) {
+            const isNew = document.getElementById(isNewCheckboxId).checked;
+            let rodId = 0;
+
+            if (isNew) {
+                const novyRodJmeno = document.getElementById(newTextId).value.trim();
+                if (!novyRodJmeno) throw new Error('Zadej jméno nového rodu.');
+
+                const { data: existingRod, error: findError } = await supabaseClient
+                    .from('T_Rod')
+                    .select('RodID')
+                    .ilike('JmenoRodu', novyRodJmeno)
+                    .maybeSingle();
+
+                if (findError) throw findError;
+
+                if (existingRod) {
+                    rodId = existingRod.RodID;
+                } else {
+                    const { data: insertedRod, error: insertRodError } = await supabaseClient
+                        .from('T_Rod')
+                        .insert([{ JmenoRodu: novyRodJmeno }])
+                        .select('RodID')
+                        .single();
+
+                    if (insertRodError) throw insertRodError;
+                    rodId = insertedRod.RodID;
+                }
+            } else {
+                rodId = parseInt(document.getElementById(selectId).value, 10);
+                if (!rodId) throw new Error('Vyber rod ze seznamu.');
+            }
+            return rodId;
+        }
+
+        async function handleVysevSubmit(event) {
+            event.preventDefault();
+
+            const userEmail = getCurrentUserEmail();
+            if (!userEmail) {
+                alert('Musíš být přihlášen/a, aby bylo možné výsev uložit.');
+                switchView('login');
+                return;
+            }
+
+            const druh = document.getElementById('vysev-druh-input').value.trim();
+            const varieta = document.getElementById('vysev-varieta-input').value.trim();
+            const polniCislo = document.getElementById('vysev-polni-cislo-input').value.trim();
+            const katalogCislo = document.getElementById('vysev-katalog-cislo-input').value.trim();
+            const pocet = parseInt(document.getElementById('vysev-pocet-input').value, 10);
+            const datum = document.getElementById('vysev-datum-input').value;
+            const poznamka = document.getElementById('vysev-poznamka-input').value.trim();
+
+            const isNewDodavatel = document.getElementById('vysev-new-dodavatel-checkbox').checked;
+            let dodavatelId = null;
+            let novyDodavatelJmeno = null;
+
+            if (isNewDodavatel) {
+                novyDodavatelJmeno = document.getElementById('vysev-dodavatel-new-input').value.trim();
+            } else {
+                dodavatelId = parseInt(document.getElementById('vysev-dodavatel-select').value, 10);
+            }
+
+            try {
+                const rodId = await resolveRodId('vysev-new-rod-checkbox', 'vysev-rod-new-input', 'vysev-rod-select');
+
+                const { error } = await supabaseClient.rpc('vloz_vysev', {
+                    p_rod_id: rodId,
+                    p_druh: druh,
+                    p_pocet: pocet,
+                    p_datum: datum,
+                    p_dodavatel_id: dodavatelId || 0,
+                    p_je_novy_dodavatel: isNewDodavatel,
+                    p_novy_dodavatel_jmeno: novyDodavatelJmeno || '',
+                    p_user_id: userEmail,
+                    p_poznamka: poznamka || null
+                });
+
+                if (error) throw error;
+
+                alert('Výsev byl úspěšně uložen!');
+                document.getElementById('form-vysev-data').reset();
+                // Po uložení skáčeme rovnou do katalogu, ať je hned vidět
+                // výsledek (stejné chování jako po uložení rostliny a po
+                // oddělení semenáčků) - dřív se vracelo na dashboard.
+                switchView('list-rostliny');
+            } catch (err) {
+                console.error('Chyba při ukládání:', err);
+                alert('Chyba při ukládání do databáze: ' + err.message);
+            }
+        }
+
+        async function handleRostlinaSubmit(event) {
+            event.preventDefault();
+
+            const userEmail = getCurrentUserEmail();
+            if (!userEmail) {
+                alert('Musíš být přihlášen/a, aby bylo možné rostlinu uložit.');
+                switchView('login');
+                return;
+            }
+
+            const typAkviziceNazev = document.getElementById('rostlina-akvizice-select').value;
+            const stav = document.getElementById('rostlina-stav-select').value;
+            const podnoz = document.getElementById('rostlina-podnoz-select').value.trim();
+            const druh = document.getElementById('rostlina-druh-input').value.trim();
+            const varieta = document.getElementById('rostlina-varieta-input').value.trim();
+            const polniCislo = document.getElementById('rostlina-polni-cislo-input').value.trim();
+            const katalogCislo = document.getElementById('rostlina-katalog-cislo-input').value.trim();
+            const pocet = parseInt(document.getElementById('rostlina-pocet-input').value, 10) || 1;
+            const datum = document.getElementById('rostlina-datum-input').value;
+            const poznamka = document.getElementById('rostlina-poznamka-input').value.trim();
+
+            const isNewDodavatel = document.getElementById('rostlina-new-dodavatel-checkbox').checked;
+            let dodavatelId = null;
+            let novyDodavatelJmeno = null;
+
+            if (isNewDodavatel) {
+                novyDodavatelJmeno = document.getElementById('rostlina-dodavatel-new-input').value.trim();
+            } else {
+                dodavatelId = parseInt(document.getElementById('rostlina-dodavatel-select').value, 10);
+            }
+
+            try {
+                const rodId = await resolveRodId('rostlina-new-rod-checkbox', 'rostlina-rod-new-input', 'rostlina-rod-select');
+
+                const { data: noveRostliny, error } = await supabaseClient.rpc('vloz_rostlinu', {
+                    p_rod_id: rodId,
+                    p_druh: druh,
+                    p_varieta: varieta || null,
+                    p_polni_cislo: polniCislo || null,
+                    p_katalog_cislo: katalogCislo || null,
+                    p_datum: datum,
+                    p_poznamka: poznamka || null,
+                    p_stav_nazev: stav,
+                    p_typ_akvizice_nazev: typAkviziceNazev,
+                    p_dodavatel_id: (!isNewDodavatel && dodavatelId) ? dodavatelId : null,
+                    p_je_novy_dodavatel: isNewDodavatel,
+                    p_novy_dodavatel_jmeno: novyDodavatelJmeno || null,
+                    p_podnoz: podnoz || null,
+                    p_user_id: userEmail,
+                    p_pocet: pocet
+                });
+
+                if (error) throw error;
+
+                const pocetVytvorenych = noveRostliny ? noveRostliny.length : pocet;
+                alert(pocetVytvorenych > 1
+                    ? `Hotovo! Úspěšně uloženo ${pocetVytvorenych} ks jako samostatné záznamy.`
+                    : 'Rostlina byla úspěšně uložena!');
+                document.getElementById('form-rostlina-data').reset();
+                // Po uložení skáčeme rovnou do katalogu, ať je hned vidět
+                // výsledek - dřív se vracelo na dashboard.
+                switchView('list-rostliny');
+            } catch (err) {
+                console.error('Chyba při ukládání rostliny:', err);
+                alert('Chyba při ukládání do databáze: ' + err.message);
+            }
+        }
+
+        async function handleKliceniSubmit(event) {
+            event.preventDefault();
+            if (!currentDetailItem) return;
+
+            const inputVal = document.getElementById('kliceni-count-input').value;
+            if (inputVal === "") return;
+
+            const noveKliceni = parseInt(inputVal, 10);
+            const vyseto = Number(currentDetailItem.PocetVysetychSemen) || 0;
+            const stareKliceni = Number(currentDetailItem.PocetVyklicenych) || 0;
+
+            if (noveKliceni < stareKliceni) {
+                alert(`Počet vyklíčených nelze snížit z ${stareKliceni} na ${noveKliceni}.\n\nHistorické klíčení nelze snižovat (lze ho pouze navyšovat při dodatečném klíčení). Úhyn nebo oddělení semenáčů se projevuje na počtu kusů k dispozici, nikoliv na úspěšnosti klíčení.`);
+                return;
+            }
+
+            if (vyseto > 0 && noveKliceni > vyseto) {
+                alert(`Počet vyklíčených (${noveKliceni}) nemůže být větší než počet vysetých semen (${vyseto}).`);
+                return;
+            }
+
+            const jmenoRostliny = `${currentDetailItem.Rod || ''} ${currentDetailItem.Druh || ''} (ID #${currentDetailItem.RostlinaID})`;
+
+            // Nula je platná hodnota (= opravdu nic nevyklíčilo) a od té
+            // chvíle se výsev počítá do klíčivosti jako 0 %. Protože to
+            // statistiku stáhne dolů, appka se u nuly zeptá výslovně.
+            // Nulové klíčení = výsev selhal: appka rovnou přepne stav na
+            // "Výsev selhal" (tím výsev spadne do Archivu) přes zmen_stav(),
+            // takže se změna zapíše i do historie stavů s dnešním datem.
+            // Opačný případ - opožděné klíčení u výsevu, který už byl
+            // označený jako selhaný - vrátí stav zpátky na "Vyseto".
+            const aktualniStav = currentDetailItem.Stav || '';
+            let novyStav = null;
+            if (noveKliceni === 0 && aktualniStav !== STAV_VYSEV_SELHAL) {
+                novyStav = STAV_VYSEV_SELHAL;
+            } else if (noveKliceni > 0 && aktualniStav === STAV_VYSEV_SELHAL) {
+                novyStav = STAV_VYSETO;
+            }
+
+            let potvrzeni;
+            if (noveKliceni === 0) {
+                potvrzeni = `Opravdu u ${jmenoRostliny} nic nevyklíčilo?\n\nVýsev se označí jako "${STAV_VYSEV_SELHAL}", přesune se do Archivu a do statistiky klíčivosti se započítá s 0 %. Pokud je na vyhodnocení ještě brzo, nech klíčení nezadané.`;
+            } else if (novyStav === STAV_VYSETO) {
+                potvrzeni = `Opravdu chceš doplnit klíčení pro ${jmenoRostliny} na celkových ${noveKliceni} ks?\n\nVýsev je teď označený jako "${STAV_VYSEV_SELHAL}" - jeho stav se vrátí na "${STAV_VYSETO}" a zmizí z Archivu.`;
+            } else {
+                potvrzeni = `Opravdu chceš doplnit klíčení pro ${jmenoRostliny} na celkových ${noveKliceni} ks?`;
+            }
+
+            if (!confirm(potvrzeni)) {
+                return;
+            }
+
+            try {
+                const rozdilKliceni = noveKliceni - stareKliceni;
+                const aktualniKusy = Number(currentDetailItem.PocetKusu) || 0;
+
+                let pocetKusuNew = Math.max(0, aktualniKusy + rozdilKliceni);
+
+                let updatePayload = {
+                    PocetVyklicenych: noveKliceni,
+                    PocetKusu: pocetKusuNew
+                };
+
+                const { error: updateErr } = await supabaseClient
+                    .from('T_Rostliny')
+                    .update(updatePayload)
+                    .eq('RostlinaID', currentDetailItem.RostlinaID);
+
+                if (updateErr) throw updateErr;
+
+                if (novyStav) {
+                    const { error: stavErr } = await supabaseClient.rpc('zmen_stav', {
+                        p_rostlina_id: currentDetailItem.RostlinaID,
+                        p_stav_nazev: novyStav,
+                        p_datum: dnesLokalne(),
+                        p_user_id: getCurrentUserEmail()
+                    });
+                    if (stavErr) {
+                        // Klíčení už je uložené, jen se nepovedla změna
+                        // stavu - dá se dodělat ručně v "Změna stavu".
+                        console.error('Chyba při změně stavu po klíčení:', stavErr);
+                        alert(`Klíčení bylo uloženo, ale stav se nepodařilo změnit na "${novyStav}":\n${stavErr.message}\n\nZměň ho prosím ručně v sekci "Změna stavu".`);
+                        currentDetailItem = null;
+                        switchView('list-rostliny');
+                        return;
+                    }
+                }
+
+                if (novyStav === STAV_VYSEV_SELHAL) {
+                    alert(`Uloženo. Výsev je označený jako "${STAV_VYSEV_SELHAL}" a najdeš ho v Archivu.`);
+                } else if (novyStav === STAV_VYSETO) {
+                    alert(`Klíčení bylo aktualizováno na ${noveKliceni} ks a stav vrácen na "${STAV_VYSETO}". Počet kusů: ${pocetKusuNew} ks.`);
+                } else {
+                    alert(`Klíčení bylo úspěšně aktualizováno! Počet kusů navýšen na ${pocetKusuNew} ks.`);
+                }
+                // Po doplnění klíčení rovnou do katalogu, ať je změna
+                // hned vidět v seznamu - dřív se appka vracela na detail
+                // (showDetail).
+                currentDetailItem = null;
+                switchView('list-rostliny');
+            } catch (err) {
+                console.error('Chyba při aktualizaci klíčení:', err);
+                alert('Chyba při ukládání: ' + err.message);
+            }
+        }
+
+        async function handleSplitSubmit(event) {
+            event.preventDefault();
+            if (!currentDetailItem) return;
+
+            const userEmail = getCurrentUserEmail();
+            if (!userEmail) {
+                alert('Musíš být přihlášen/a, aby bylo možné rostlinu oddělit.');
+                switchView('login');
+                return;
+            }
+
+            const pocetKOddeleni = parseInt(document.getElementById('split-count-input').value, 10);
+            const stav = document.getElementById('split-stav-select').value;
+            const podnoz = document.getElementById('split-podnoz-select') ? document.getElementById('split-podnoz-select').value.trim() : '';
+            const datum = document.getElementById('split-datum-input').value;
+            const poznamka = document.getElementById('split-poznamka-input').value.trim();
+
+            // Rychlá UX kontrola před odesláním (autoritativní kontrolu -
+            // včetně skutečně dostupného počtu kusů se zámkem proti souběhu,
+            // podnože u roubovaného stavu i chronologie datumu (viz
+            // claude/sql_26_kontrola_chronologie_datumu.sql) - dělá až
+            // funkce rozdel_rostlinu() na serveru.
+            if (!pocetKOddeleni || pocetKOddeleni <= 0) {
+                alert('Zadej platný počet kusů k oddělení (větší než 0).');
+                return;
+            }
+
+            // Datum oddělení nemůže logicky předcházet datu výsevu/pořízení
+            // rodičovské rostliny (viz claude/sql_26_kontrola_chronologie_datumu.sql -
+            // řeší TODO "Kontrola nesmyslných datumů"). Tohle je jen rychlá
+            // UX kontrola v prohlížeči (min atribut na inputu níže dělá totéž
+            // vizuálně) - skutečné vynucení je v rozdel_rostlinu() na serveru.
+            if (currentDetailItem.DatumVysevu && datum < currentDetailItem.DatumVysevu) {
+                alert(`Datum oddělení (${datum}) nemůže být dřívější než datum výsevu/pořízení této rostliny (${currentDetailItem.DatumVysevu}).`);
+                return;
+            }
+
+            const submitBtn = event.target.querySelector('button[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+
+            try {
+                // Rozdělení rostliny je od teď jedna atomická operace na
+                // straně databáze (Postgres funkce rozdel_rostlinu),
+                // sdílená s desktopovou verzí v Appsmithu - viz
+                // claude/sql_7_sjednoceni_rozdeleni.sql. Dřív tenhle krok
+                // dělal cyklus jednotlivých insertů rovnou z prohlížeče bez
+                // transakce, což při výpadku uprostřed mohlo nechat data
+                // v nekonzistentním stavu (část nových rostlin vznikla,
+                // rodiči se nesnížil počet kusů, nebo naopak).
+                const { data: noveRostliny, error: rpcErr } = await supabaseClient.rpc('rozdel_rostlinu', {
+                    p_rostlina_id: currentDetailItem.RostlinaID,
+                    p_pocet: pocetKOddeleni,
+                    p_stav_nazev: stav,
+                    p_datum: datum,
+                    p_podnoz: podnoz || null,
+                    p_poznamka: poznamka || null,
+                    p_user_id: userEmail
+                });
+
+                if (rpcErr) throw rpcErr;
+
+                const pocetVytvorenych = noveRostliny ? noveRostliny.length : pocetKOddeleni;
+                alert(`Hotovo! Úspěšně odděleno ${pocetVytvorenych} ks.`);
+
+                // Po oddělení skáčeme rovnou do katalogu, ať jsou nové
+                // rostliny hned vidět v seznamu (dřív se appka vracela na
+                // detail rodičovské rostliny/výsevu).
+                switchView('list-rostliny');
+            } catch (err) {
+                console.error('Chyba při oddělování semenáčů:', err);
+                alert('Chyba při ukládání: ' + err.message);
+            } finally {
+                if (submitBtn) submitBtn.disabled = false;
+            }
+        }
+
+        async function handleDetailGraft(selectedPodnoz) {
+            if (!selectedPodnoz || !currentDetailItem) return;
+            const jmenoRostliny = `${currentDetailItem.Rod || ''} ${currentDetailItem.Druh || ''} (ID #${currentDetailItem.RostlinaID})`;
+            const graftSelect = document.getElementById('detail-graft-podnoz');
+            const jeOdroubovani = selectedPodnoz.startsWith('Žádná');
+
+            const otazka = jeOdroubovani
+                ? `Opravdu chceš rostlinu ${jmenoRostliny} odroubovat (zpravokořenit)?`
+                : `Opravdu chceš přeroubovat rostlinu ${jmenoRostliny} na podnož "${selectedPodnoz}"?`;
+            if (!confirm(otazka)) {
+                graftSelect.value = "";
+                return;
+            }
+
+            // Zablokujeme ovládací prvek, dokud operace neskončí - zabrání to
+            // souběžnému spuštění dvou přeroubování nad stejnou rostlinou.
+            graftSelect.disabled = true;
+
+            try {
+                // Přeroubování je jedna atomická operace na serveru
+                // (claude/sql_32_prerouboj_rostlinu.sql), společná s desktopem:
+                // uzavře současnou podnož, zapíše novou, změní stav (roubovaná,
+                // u volby "Žádná" zpravokořenělá) a zapíše událost do historie
+                // stavů. Vlastníka, podnož i datum kontroluje server. Datum je
+                // dnešek podle místního času zařízení (dnesLokalne); server od
+                // sql_40 počítá "dnes" taky podle českého času (dnes_cz).
+                // Dřív tu byly tři samostatné zápisy bez transakce a bez
+                // záznamu do historie stavů.
+                const { error } = await supabaseClient.rpc('prerouboj_rostlinu', {
+                    p_rostlina_id: currentDetailItem.RostlinaID,
+                    p_podnoz: selectedPodnoz,
+                    p_datum: dnesLokalne()
+                });
+
+                if (error) throw error;
+
+                alert(jeOdroubovani
+                    ? 'Rostlina byla odroubována (zpravokořenělá).'
+                    : 'Rostlina byla úspěšně přeroubována a podnož uložena!');
+                // Po přeroubování rovnou do katalogu, ať je změna hned
+                // vidět v seznamu.
+                currentDetailItem = null;
+                switchView('list-rostliny');
+            } catch (err) {
+                console.error('Chyba při přeroubování:', err);
+                alert('Chyba při ukládání podnože: ' + err.message);
+                graftSelect.value = "";
+            } finally {
+                graftSelect.disabled = false;
+            }
+        }
+
+        async function handleStatusChange() {
+            if (!currentDetailItem) return;
+
+            const userEmail = getCurrentUserEmail();
+            if (!userEmail) {
+                alert('Musíš být přihlášen/a, aby bylo možné změnit stav.');
+                switchView('login');
+                return;
+            }
+
+            const newStavNazev = document.getElementById('detail-new-status').value;
+            if (!newStavNazev) {
+                alert('Vyber prosím nový stav z číselníku.');
+                return;
+            }
+
+            const today = dnesLokalne();
+            const datum = document.getElementById('detail-status-datum').value || today;
+
+            // Rychlá UX kontrola data (skutečné vynucení je v zmen_stav()
+            // na serveru, viz claude/sql_27_zmen_stav_historie.sql).
+            if (datum > today) {
+                alert('Datum změny stavu nemůže být v budoucnosti.');
+                return;
+            }
+            if (currentDetailItem.DatumVysevu && datum < currentDetailItem.DatumVysevu) {
+                alert(`Datum změny stavu (${datum}) nemůže být dřívější než datum výsevu/pořízení této rostliny (${currentDetailItem.DatumVysevu}).`);
+                return;
+            }
+
+            const jmenoRostliny = `${currentDetailItem.Rod || ''} ${currentDetailItem.Druh || ''} (ID #${currentDetailItem.RostlinaID})`;
+            if (!confirm(`Opravdu chceš změnit stav pro ${jmenoRostliny} na "${newStavNazev}" k datu ${datum}?`)) {
+                return;
+            }
+
+            try {
+                // Změna stavu + zápis do historie stavů (T_HistorieStavu)
+                // v jedné transakci na serveru - viz
+                // claude/sql_27_zmen_stav_historie.sql. Dřív appka měnila
+                // jen T_Rostliny.Stav/StavID a do historie nezapisovala nic,
+                // takže úhyny/prodeje z mobilu neměly datum a statistika
+                // "Ztráty podle příčiny" je vůbec neviděla.
+                const { error: rpcErr } = await supabaseClient.rpc('zmen_stav', {
+                    p_rostlina_id: currentDetailItem.RostlinaID,
+                    p_stav_nazev: newStavNazev,
+                    p_datum: datum,
+                    p_user_id: userEmail
+                });
+
+                if (rpcErr) throw rpcErr;
+
+                alert('Stav rostliny byl úspěšně změněn!');
+                // Po změně stavu rovnou do katalogu, ať je výsledek hned
+                // vidět v seznamu - dřív se appka vracela na detail
+                // (showDetail).
+                currentDetailItem = null;
+                switchView('list-rostliny');
+            } catch (err) {
+                console.error('Chyba při změně stavu:', err);
+                alert('Chyba při uložení: ' + err.message);
+            }
+        }
+
+        async function loadRostlinyData() {
+            const container = document.getElementById('rostliny-container');
+            const userEmail = getCurrentUserEmail();
+
+            if (!userEmail) {
+                switchView('login');
+                return;
+            }
+
+            container.innerHTML = '<p style="text-align: center; color: #718096;">Načítám tvoje rostliny...</p>';
+
+            try {
+                const { data: rostlinyData, error: rostlinyError } = await supabaseClient
+                    .from('T_Rostliny')
+                    .select('*')
+                    .eq('user_id', userEmail)
+                    .order('RostlinaID', { ascending: false })
+                    .limit(500);
+
+                if (rostlinyError) throw rostlinyError;
+
+                const { data: podnozeData, error: podnozeError } = await supabaseClient
+                    .from('rostlina_podnoz_historie')
+                    .select('*');
+
+                if (podnozeError) {
+                    console.warn('Nepodařilo se načíst historii podnoží:', podnozeError);
+                }
+
+                allRostlinyCache = rostlinyData.map(rostlina => {
+                    const podnozeProRostlinu = podnozeData
+                        ? podnozeData.filter(p => p.rostlina_id === rostlina.RostlinaID)
+                        : [];
+                    return {
+                        ...rostlina,
+                        rostlina_podnoz_historie: podnozeProRostlinu
+                    };
+                });
+
+                populateStatusFilter(allRostlinyCache);
+                populateDodavatelFilter(allRostlinyCache);
+                applyFilterAndSort();
+            } catch (err) {
+                console.error('Chyba načítání rostlin:', err);
+                container.innerHTML = '<p style="text-align: center; color: red;">Chyba při načítání dat: ' + err.message + '</p>';
+            }
+        }
+
+        function populateStatusFilter(items) {
+            const filterSelect = document.getElementById('status-filter');
+            const currentVal = filterSelect.value;
+            const stavy = [...new Set(items.map(i => i.Stav).filter(Boolean))].sort();
+
+            let html = '<option value="">Všechny stavy</option>';
+            stavy.forEach(stav => {
+                html += `<option value="${stav}">${stav}</option>`;
+            });
+            filterSelect.innerHTML = html;
+            filterSelect.value = currentVal;
+        }
+
+        function populateDodavatelFilter(items) {
+            const filterSelect = document.getElementById('dodavatel-filter');
+            const currentVal = filterSelect.value;
+            const dodavatelé = [...new Set(items.map(i => i.Dodavatel).filter(Boolean))].sort();
+
+            let html = '<option value="">Všichni dodavatelé</option>';
+            dodavatelé.forEach(d => {
+                html += `<option value="${d}">${d}</option>`;
+            });
+            filterSelect.innerHTML = html;
+            filterSelect.value = currentVal;
+        }
+
+        function applyFilterAndSort() {
+            const query = document.getElementById('search-input').value.trim().toLowerCase();
+            const sortBy = document.getElementById('sort-select').value;
+            const statusFilter = document.getElementById('status-filter').value;
+            const dodavatelFilter = document.getElementById('dodavatel-filter').value;
+
+            let filtered = allRostlinyCache.filter(item => {
+                if (activeQuickFilter === 'kos') {
+                    if (!item.IsDeleted) return false;
+                } else {
+                    if (item.IsDeleted) return false;
+
+                    // Kompletně vyčerpaný výsev (všechno se oddělilo do
+                    // samostatných rostlin) - PocetKusu = 0, ale zároveň
+                    // PocetVyklicenych > 0 (něco vyklíčilo a bylo to celé
+                    // odděleno). Liší se tím od čerstvého, ještě nezahájeného
+                    // výsevu (PocetVyklicenych nezadané/NULL nebo 0), který zůstává mezi
+                    // živými/čekajícími. Stejná definice jako na desktopu.
+                    const pocetKusu = Number(item.PocetKusu) || 0;
+                    const pocetVyklicenych = Number(item.PocetVyklicenych) || 0;
+                    const jeVycerpanyVysev = pocetKusu === 0 && pocetVyklicenych > 0;
+
+                    if (activeQuickFilter === 'zive') {
+                        const stavLower = (item.Stav || '').toLowerCase();
+                        const jeArchivniDuvod = stavLower.includes('archiv') || stavLower.includes('uhyn') || stavLower.includes('mrtv') || stavLower.includes('zahyn') || stavLower.includes('selhal');
+                        if (jeArchivniDuvod || jeVycerpanyVysev) {
+                            return false;
+                        }
+                    } else if (activeQuickFilter === 'archiv') {
+                        const stavLower = (item.Stav || '').toLowerCase();
+                        const jeUhynOdcizNeboSelhal = stavLower.includes('uhyn') || stavLower.includes('odciz') || stavLower.includes('selhal');
+                        if (!(jeUhynOdcizNeboSelhal || jeVycerpanyVysev)) {
+                            return false;
+                        }
+                    }
+                }
+
+                const matchesStatus = !statusFilter || item.Stav === statusFilter;
+                if (!matchesStatus) return false;
+
+                const matchesDodavatel = !dodavatelFilter || item.Dodavatel === dodavatelFilter;
+                if (!matchesDodavatel) return false;
+
+                if (!query) return true;
+                const textToSearch = `${item.RostlinaID} ${item.Rod || ''} ${item.Druh || ''} ${item.Varieta || ''} ${item.PolniCislo || ''}`.toLowerCase();
+                return textToSearch.includes(query);
+            });
+
+            filtered.sort((a, b) => {
+                if (sortBy === 'id-desc') {
+                    return b.RostlinaID - a.RostlinaID;
+                } else if (sortBy === 'id-asc') {
+                    return a.RostlinaID - b.RostlinaID;
+                } else if (sortBy === 'alpha') {
+                    const rodA = (a.Rod || '').toLowerCase();
+                    const rodB = (b.Rod || '').toLowerCase();
+                    if (rodA !== rodB) return rodA.localeCompare(rodB);
+                    return (a.Druh || '').toLowerCase().localeCompare((b.Druh || '').toLowerCase());
+                } else if (sortBy === 'dodavatel') {
+                    return (a.Dodavatel || '').toLowerCase().localeCompare((b.Dodavatel || '').toLowerCase());
+                }
+                return 0;
+            });
+
+            renderRostlinyList(filtered);
+        }
+
+        function renderRostlinyList(items) {
+            const container = document.getElementById('rostliny-container');
+            if (!items || items.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #718096; padding: 20px;">Žádné rostliny neodpovídají zvolenému filtru.</p>';
+                return;
+            }
+
+            let html = '';
+            items.forEach(item => {
+                const rod = item.Rod || '';
+                const druh = item.Druh || '';
+                const varieta = item.Varieta ? ` ${item.Varieta}` : '';
+                const stav = item.Stav || 'Neznámý stav';
+                const polniCislo = item.PolniCislo ? ` | ${item.PolniCislo}` : '';
+                const dodavatel = item.Dodavatel || 'neuveden';
+                const kusy = item.PocetKusu ?? item.PocetVyklicenych ?? 0;
+
+                html += `
+                    <div class="plant-item-card" onclick="showDetail(${item.RostlinaID})">
+                        <div class="plant-row-main">
+                            <span class="plant-id">#${item.RostlinaID}</span>
+                            <span class="plant-name">${rod} ${druh}${varieta}${polniCislo}</span>
+                            <span class="plant-status">${stav}</span>
+                        </div>
+                        <div class="plant-row-sub">
+                            <span>Dodavatel: ${dodavatel}</span>
+                            <span>Ks: <strong>${kusy}</strong></span>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        async function showDetail(rostlinaId) {
+            const { data: item, error } = await supabaseClient
+                .from('T_Rostliny')
+                .select('*')
+                .eq('RostlinaID', rostlinaId)
+                .single();
+
+            if (error || !item) {
+                alert('Nepodařilo se načíst detail rostliny.');
+                return;
+            }
+
+            const { data: podnozeData } = await supabaseClient
+                .from('rostlina_podnoz_historie')
+                .select('*')
+                .eq('rostlina_id', rostlinaId);
+
+            item.rostlina_podnoz_historie = podnozeData || [];
+            currentDetailItem = item;
+
+            const poznamkaTextarea = document.getElementById('poznamka-novy-text');
+            if (poznamkaTextarea) poznamkaTextarea.value = '';
+            loadPoznamky(rostlinaId);
+
+            let aktivniPodnoz = '-';
+            if (item.rostlina_podnoz_historie && item.rostlina_podnoz_historie.length > 0) {
+                // Otevřené záznamy (datum_do = null) mají přednost; pokud je jich
+                // (chybně) víc, vybere se ten s nejnovějším datum_od (při shodě vyšší id).
+                // Bez otevřeného záznamu se jako záloha vezme nejnověji uzavřený.
+                const serazene = [...item.rostlina_podnoz_historie].sort((a, b) => {
+                    if (a.datum_do === null && b.datum_do !== null) return -1;
+                    if (a.datum_do !== null && b.datum_do === null) return 1;
+                    const datumPorovnani = (b.datum_od || '').localeCompare(a.datum_od || '');
+                    if (datumPorovnani !== 0) return datumPorovnani;
+                    return (b.id || 0) - (a.id || 0);
+                });
+                const podnozZaznam = serazene[0];
+                if (podnozZaznam && podnozZaznam.podnoz) {
+                    aktivniPodnoz = podnozZaznam.podnoz;
+                }
+            }
+
+            const detailContainer = document.getElementById('detail-content');
+
+            detailContainer.innerHTML = `
+                <div style="text-align: center; margin-bottom: 16px;">
+                    <span class="plant-id" style="font-size: 1rem; padding: 4px 12px;">ID #${item.RostlinaID}</span>
+                    <h3 style="margin: 10px 0 4px 0; font-size: 1.4rem; color: var(--primary);">${item.Rod || ''} ${item.Druh || ''}</h3>
+                    <div style="color: #718096; font-size: 0.9rem;">${item.Varieta ? 'Varieta: ' + item.Varieta : ''}</div>
+                </div>
+
+                <div class="detail-row">
+                    <span class="detail-label">Stav rostliny</span>
+                    <span class="detail-value" style="font-weight: bold;">${item.Stav || '-'}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Typ akvizice</span>
+                    <span class="detail-value">${item.TypAkvizice || '-'}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Datum pořízení / výsevu</span>
+                    <span class="detail-value">${item.DatumVysevu || '-'}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Dodavatel</span>
+                    <span class="detail-value">${item.Dodavatel || '-'}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Katalogové číslo</span>
+                    <span class="detail-value">${item.KatalogCisloDodavatele || '-'}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Počet vysetých semen</span>
+                    <span class="detail-value">${item.PocetVysetychSemen ?? '-'}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Počet vyklíčených</span>
+                    <span class="detail-value" style="font-weight: bold; color: var(--primary);">${
+                        (item.PocetVyklicenych === null || item.PocetVyklicenych === undefined)
+                            ? ((Number(item.PocetVysetychSemen) || 0) > 0
+                                ? '<span style="font-weight: normal; color: #a0aec0; font-style: italic;">zatím nezadáno</span>'
+                                : '-')
+                            : item.PocetVyklicenych
+                    }</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Počet kusů k dispozici</span>
+                    <span class="detail-value">${item.PocetKusu ?? '0'}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Podnož</span>
+                    <span class="detail-value" style="font-weight: bold; color: var(--primary);">${aktivniPodnoz}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Polní číslo</span>
+                    <span class="detail-value">${item.PolniCislo || '-'}</span>
+                </div>
+            `;
+            // Statické pole "Poznámka" (T_Rostliny.Poznamka) se tu záměrně
+            // nezobrazuje - poznámky se teď ukazují jednotně v seznamu
+            // "Poznámky" níže (rostlina_poznamky), kam se od 2026-09-19
+            // ukládá i ta počáteční, zadaná při založení. Data v
+            // T_Rostliny.Poznamka zůstávají zachovaná kvůli desktopu.
+
+
+            const wrapperKliceni = document.getElementById('wrapper-kliceni');
+            const wrapperSplit = document.getElementById('wrapper-split');
+            const kliceniSection = document.getElementById('kliceni-section');
+            const splitSection = document.getElementById('split-section');
+            const statusChangeSection = document.getElementById('status-change-section');
+
+            if(kliceniSection) kliceniSection.classList.add('hidden');
+            if(splitSection) splitSection.classList.add('hidden');
+            if(statusChangeSection) statusChangeSection.classList.add('hidden');
+
+            const poznamkyWrapper = document.getElementById('poznamky-list-wrapper');
+            if (poznamkyWrapper) poznamkyWrapper.classList.add('hidden');
+
+            const detailGraftSelect = document.getElementById('detail-graft-podnoz');
+            if(detailGraftSelect) detailGraftSelect.value = "";
+
+            // Datum změny stavu (sql_27) - výchozí dnešek, nejde vybrat
+            // budoucnost ani den před výsevem/pořízením rostliny.
+            const statusDatumInput = document.getElementById('detail-status-datum');
+            const statusDatumHint = document.getElementById('detail-status-datum-hint');
+            if (statusDatumInput) {
+                const dnes = dnesLokalne();
+                statusDatumInput.value = dnes;
+                statusDatumInput.max = dnes;
+                if (item.DatumVysevu) {
+                    statusDatumInput.min = item.DatumVysevu;
+                } else {
+                    statusDatumInput.removeAttribute('min');
+                }
+            }
+            if (statusDatumHint) {
+                statusDatumHint.textContent = 'Kdy ke změně došlo (např. den úhynu nebo prodeje). Ukládá se do historie a statistik ztrát.';
+            }
+
+            const isVysev = item.PocetVysetychSemen > 0 || (item.TypAkvizice && item.TypAkvizice.toLowerCase().includes('výsev'));
+
+            // Přeroubování dává smysl jen u jednotlivé rostliny - dosud
+            // nerozdělený výsev jako celek se roubovat nedá.
+            const groupDetailGraft = document.getElementById('group-detail-graft');
+            if (groupDetailGraft) groupDetailGraft.classList.toggle('hidden', isVysev);
+
+            let available = item.PocetKusu;
+            if (available == null || available === "" || Number(available) === 0) {
+                available = item.PocetVyklicenych;
+            }
+            available = Number(available) || 0;
+
+            if (isVysev) {
+                wrapperKliceni.classList.remove('hidden');
+                document.getElementById('kliceni-vyseto-max').textContent = item.PocetVysetychSemen ?? 0;
+                document.getElementById('kliceni-count-input').value = "";
+                const kliceniHint = document.getElementById('kliceni-hint');
+                if (kliceniHint) {
+                    kliceniHint.textContent = (item.PocetVyklicenych === null || item.PocetVyklicenych === undefined)
+                        ? 'Klíčení zatím není zadané, takže se tenhle výsev do statistiky klíčivosti nepočítá. Až bude jasné, že nic nevyklíčilo, zadej 0 – výsev se označí jako "Výsev selhal" a přesune do Archivu.'
+                        : '';
+                }
+
+                if (available > 0) {
+                    wrapperSplit.classList.remove('hidden');
+                    document.getElementById('split-max-count').textContent = available;
+                    document.getElementById('split-count-input').max = available;
+                    document.getElementById('split-count-input').value = 1;
+
+                    const today = dnesLokalne();
+                    document.getElementById('split-datum-input').value = today;
+                    document.getElementById('split-datum-input').max = today;
+
+                    // NOVÉ (sql_26 - kontrola nesmyslných datumů): datum
+                    // oddělení nesmí být dřívější než datum výsevu/pořízení
+                    // téhle rostliny. `min` na date inputu appce zabrání
+                    // zvolit dřívější den (prohlížeč to samo ohlídá);
+                    // skutečné, neobejitelné vynucení je v rozdel_rostlinu()
+                    // na serveru, tohle je jen UX pomůcka navíc.
+                    const datumHint = document.getElementById('split-datum-hint');
+                    if (item.DatumVysevu) {
+                        document.getElementById('split-datum-input').min = item.DatumVysevu;
+                        if (datumHint) datumHint.textContent = `Nesmí být dřívější než datum výsevu/pořízení (${item.DatumVysevu}).`;
+                    } else {
+                        document.getElementById('split-datum-input').removeAttribute('min');
+                        if (datumHint) datumHint.textContent = '';
+                    }
+
+                    // Proaktivní upozornění na limit free tarifu - oddělení
+                    // umí vytvořit víc záznamů najednou, takže je to
+                    // nejrizikovější místo pro narazit na limit bez varování.
+                    refreshLimitInfo().then(() => renderLimitBanner('split-limit-banner'));
+
+                    loadStavOptions(isVysev);
+                    loadPodnozeOptions();
+                } else {
+                    wrapperSplit.classList.add('hidden');
+                }
+            } else {
+                wrapperKliceni.classList.add('hidden');
+                wrapperSplit.classList.add('hidden');
+            }
+
+            loadPodnozeOptions();
+            loadStavOptions(isVysev);
+
+            renderTrashSection(item);
+
+            switchView('detail-rostlina');
+        }
+
+        function renderTrashSection(item) {
+            const container = document.getElementById('trash-section-content');
+            if (!container) return;
+
+            if (item.IsDeleted) {
+                container.innerHTML = `
+                    <p style="font-size: 0.85rem; color: #718096; margin-top: 0;">Tahle rostlina je v koši – nepočítá se do statistik ani běžných seznamů. Můžeš ji obnovit, nebo trvale smazat.</p>
+                    <button type="button" style="width: 100%; margin-bottom: 8px; background-color: white; color: var(--primary); border: 1px solid var(--primary);" onclick="handleRestoreFromTrash()">↩️ Obnovit z koše</button>
+                    <button type="button" style="width: 100%; background-color: #c62828; color: white; border-color: #c62828;" onclick="handlePermanentDelete()">❌ Trvale smazat (nevratné)</button>
+                `;
+            } else {
+                container.innerHTML = `
+                    <p style="font-size: 0.85rem; color: #718096; margin-top: 0;">Přesune rostlinu do koše – zmizí z běžných seznamů i statistik, ale dá se odtamtud kdykoliv obnovit nebo trvale smazat.</p>
+                    <button type="button" style="width: 100%; background-color: #ffebee; color: #c62828; border-color: #ffcdd2;" onclick="handleMoveToTrash()">🗑️ Přesunout do koše</button>
+                `;
+            }
+        }
+
+        async function handleMoveToTrash() {
+            if (!currentDetailItem || !currentDetailItem.RostlinaID) return;
+
+            const jmeno = `${currentDetailItem.Rod || ''} ${currentDetailItem.Druh || ''} (ID #${currentDetailItem.RostlinaID})`;
+            if (!confirm(`Přesunout ${jmeno} do koše?\n\nZmizí z běžných seznamů a statistik, ale dá se kdykoliv obnovit.`)) {
+                return;
+            }
+
+            try {
+                const { error } = await supabaseClient
+                    .from('T_Rostliny')
+                    .update({ IsDeleted: true })
+                    .eq('RostlinaID', currentDetailItem.RostlinaID);
+
+                if (error) throw error;
+
+                alert('Rostlina byla přesunuta do koše.');
+                // Po přesunu do koše rovnou zpět na seznam - rostlina teď
+                // patří do jiného pohledu (Koš), takže zůstávat na jejím
+                // detailu by jen matlo. Dřív se tu volalo showDetail().
+                currentDetailItem = null;
+                switchView('list-rostliny');
+            } catch (err) {
+                console.error('Chyba při přesunu do koše:', err);
+                alert('Chyba při ukládání: ' + err.message);
+            }
+        }
+
+        async function handleRestoreFromTrash() {
+            if (!currentDetailItem || !currentDetailItem.RostlinaID) return;
+
+            const jmeno = `${currentDetailItem.Rod || ''} ${currentDetailItem.Druh || ''} (ID #${currentDetailItem.RostlinaID})`;
+            if (!confirm(`Obnovit ${jmeno} z koše?`)) {
+                return;
+            }
+
+            try {
+                const { error } = await supabaseClient
+                    .from('T_Rostliny')
+                    .update({ IsDeleted: false })
+                    .eq('RostlinaID', currentDetailItem.RostlinaID);
+
+                if (error) throw error;
+
+                alert('Rostlina byla obnovena z koše.');
+                await showDetail(currentDetailItem.RostlinaID);
+            } catch (err) {
+                console.error('Chyba při obnovování z koše:', err);
+                alert('Chyba při ukládání: ' + err.message);
+            }
+        }
+
+        async function handlePermanentDelete() {
+            if (!currentDetailItem || !currentDetailItem.RostlinaID) return;
+
+            const jmeno = `${currentDetailItem.Rod || ''} ${currentDetailItem.Druh || ''} (ID #${currentDetailItem.RostlinaID})`;
+            if (!confirm(`Opravdu TRVALE smazat ${jmeno}?\n\nTohle nejde vzít zpět – záznam i s poznámkami a historií zmizí z databáze úplně.`)) {
+                return;
+            }
+            if (!confirm(`Fakt si jistý/á? Ještě jednou pro potvrzení: trvale smazat ${jmeno}?`)) {
+                return;
+            }
+
+            try {
+                const { error } = await supabaseClient
+                    .from('T_Rostliny')
+                    .delete()
+                    .eq('RostlinaID', currentDetailItem.RostlinaID);
+
+                if (error) throw error;
+
+                alert('Rostlina byla trvale smazána.');
+                currentDetailItem = null;
+                switchView('list-rostliny');
+            } catch (err) {
+                console.error('Chyba při trvalém mazání:', err);
+                alert('Chyba při mazání: ' + err.message);
+            }
+        }
+
+        async function handleEmptyTrash() {
+            const userEmail = getCurrentUserEmail();
+            if (!userEmail) {
+                alert('Musíš být přihlášen/a.');
+                switchView('login');
+                return;
+            }
+
+            if (!confirm('Opravdu trvale smazat VŠECHNY rostliny v koši?\n\nTohle nejde vzít zpět. Rostlina, která v koši má "živého" (nesmazaného) potomka, zůstane zachovaná - tu je potřeba nejdřív poslat do koše taky.')) {
+                return;
+            }
+
+            try {
+                // Postgres funkce vyprazdni_kos maže v bezpečném pořadí
+                // (potomky před rodiči) v jedné transakci - viz
+                // claude/sql_8_vyprazdni_kos.sql. Nikdy nesmaže nic, co
+                // není označené jako IsDeleted.
+                const { data: smazane, error } = await supabaseClient.rpc('vyprazdni_kos', {
+                    p_user_id: userEmail
+                });
+
+                if (error) throw error;
+
+                const pocet = smazane ? smazane.length : 0;
+                alert(pocet > 0
+                    ? `Hotovo! Trvale smazáno ${pocet} rostlin z koše.`
+                    : 'V koši nebylo nic, co by šlo bezpečně smazat (buď je koš prázdný, nebo zbylým položkám ještě chybí poslat do koše i jejich potomky).');
+
+                await loadRostlinyData();
+            } catch (err) {
+                console.error('Chyba při vysypávání koše:', err);
+                alert('Chyba při mazání: ' + err.message);
+            }
+        }
+
+        // --- STATISTIKY ---
+        //
+        // Stejná logika (filtry, agregace) jako desktopové Appsmith query
+        // get_Klicivost / get_Klicivost_Dodavatel / get_StatistikaUhynu /
+        // get_StatistikaPodnozi (viz Multiuser_Appsmith_20260918.json), jen
+        // se sumy/průměry počítají v prohlížeči místo SQL GROUP BY - appka
+        // stejně vždycky vidí jen svoje řádky (RLS na T_Rostliny /
+        // T_HistorieStavu / rostlina_podnoz_historie je vázané na
+        // auth.jwt() email), takže žádný ruční filtr uživatele navíc
+        // nepotřebujeme.
+        //
+        // Zobrazení je záměrně "seznam s pruhy" místo sloupcových grafů -
+        // na malém displeji telefonu jsou čitelnější a nepotřebují žádnou
+        // externí knihovnu.
+        //
+        // Drill-down podle rodu/druhu (stat-detail-*) je obdoba desktopových
+        // dotazů get_Detail_Druhu / get_Srovnani_Dodavatele / get_Druhy_Srovnani
+        // (viz Multiuser_Appsmith_*.json, stránka "Statistiky") - na desktopu
+        // je to interaktivní graf navázaný na appsmith.store.vybrana_kytka,
+        // tady je to prostý rozklikávací panel nad daty, co appka už má
+        // stažená z loadStatistikyKlicivost() (statKlicivostRows).
+
+        // Cache jednotlivých řádků (ne agregátů) z poslední loadStatistikyKlicivost() -
+        // používá se pro drill-down, ať appka nemusí data znovu tahat z databáze.
+        let statKlicivostRows = [];
+        // Aktuální stav rozkliknutého panelu - { rod: 'Astrophytum', druh: null }
+        // = zobrazuje se rozpad rodu (dodavatelé + druhy), { rod, druh: '...' }
+        // = zobrazuje se seznam jednotlivých výsevů toho druhu.
+        let statDrill = { rod: null, druh: null };
+
+        // Rozbalovací lišty statistik: klepnutí otevře vybranou sekci a
+        // všechny ostatní zavře (otevřená je vždy nejvýš jedna); klepnutí
+        // na už otevřenou ji zavře. Po otevření appka lištu posune na
+        // začátek obrazovky - zavřením delší sekce nad ní by jinak mohla
+        // "ujet" nahoru mimo displej.
+        function toggleStatSekce(sekce) {
+            document.querySelectorAll('#view-statistiky .stat-acc').forEach(acc => {
+                const btn = acc.querySelector('.stat-acc-btn');
+                const body = acc.querySelector('.stat-acc-body');
+                const otevrit = acc.dataset.sekce === sekce && body.classList.contains('hidden');
+                body.classList.toggle('hidden', !otevrit);
+                btn.classList.toggle('open', otevrit);
+                if (otevrit) {
+                    btn.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                }
+            });
+        }
+
+        function renderStatBars(containerId, rows, { valueKey, labelKey, formatValue, fillClass, maxValue, emptyText, onRowClick }) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            if (!rows || rows.length === 0) {
+                container.innerHTML = `<p class="stat-empty">${emptyText || 'Zatím tu nejsou žádná data.'}</p>`;
+                return;
+            }
+
+            const effectiveMax = maxValue || Math.max(...rows.map(r => r[valueKey] || 0), 1);
+            const clickable = typeof onRowClick === 'function';
+
+            container.innerHTML = rows.map((row, idx) => {
+                const value = row[valueKey] || 0;
+                // Nulová hodnota = prázdný pruh (dřív se kreslil minimální
+                // 2% proužek i pro nulu - u timeline akvizic, kde je hodně
+                // měsíců bez přírůstku, by to působilo jako nenulová data).
+                const widthPct = value > 0 ? Math.max(2, Math.min(100, (value / effectiveMax) * 100)) : 0;
+                return `
+                    <div class="stat-row${clickable ? ' stat-row-clickable' : ''}" ${clickable ? `data-idx="${idx}"` : ''}>
+                        <div class="stat-row-head">
+                            <span class="stat-row-label">${escapeHtml(row[labelKey] || 'Neuvedeno')}${clickable ? ' <span class="stat-row-chevron">›</span>' : ''}</span>
+                            <span class="stat-row-value">${formatValue(row)}</span>
+                        </div>
+                        <div class="stat-bar-track">
+                            <div class="stat-bar-fill ${fillClass || ''}" style="width: ${widthPct}%;"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (clickable) {
+                container.querySelectorAll('.stat-row-clickable').forEach(el => {
+                    el.addEventListener('click', () => {
+                        const idx = parseInt(el.getAttribute('data-idx'), 10);
+                        onRowClick(rows[idx]);
+                    });
+                });
+            }
+        }
+
+        // Agreguje pole jednotlivých řádků (rows) podle zadaného klíče
+        // (např. 'Rod' nebo 'Dodavatel') na klíčivost v % - stejná logika,
+        // jakou dřív měla loadStatistikyKlicivost natvrdo uvnitř sebe;
+        // teď je to samostatná funkce, ať jde použít i pro drill-down
+        // (rows tam přichází předem přefiltrované na konkrétní rod).
+        // Má výsev zadané klíčení? (sql_28, 2026-09-22) - NULL v
+        // PocetVyklicenych znamená "ještě nevyhodnoceno" (typicky čerstvý
+        // výsev), NE "nic nevyklíčilo". Takový výsev se do klíčivosti
+        // vůbec nepočítá - ani jeho semena do jmenovatele, jinak by
+        // stahoval úspěšnost dolů, jako by měl 0 %. Do statistiky vstoupí
+        // až ve chvíli, kdy uživatel počet vyklíčených zadá (i kdyby 0).
+        function maZadaneKliceni(r) {
+            return r.PocetVyklicenych !== null && r.PocetVyklicenych !== undefined && r.PocetVyklicenych !== '';
+        }
+
+        function seskupPodleKlic(rows, klic) {
+            const skupiny = {};
+            rows.filter(maZadaneKliceni).forEach(r => {
+                const klicHodnota = r[klic] || 'Neuvedeno';
+                if (!skupiny[klicHodnota]) skupiny[klicHodnota] = { label: klicHodnota, vyseto: 0, vykliceno: 0 };
+                skupiny[klicHodnota].vyseto += Number(r.PocetVysetychSemen) || 0;
+                skupiny[klicHodnota].vykliceno += Number(r.PocetVyklicenych) || 0;
+            });
+            return Object.values(skupiny)
+                .filter(s => s.vyseto > 0)
+                .map(s => ({ ...s, pct: Math.round((s.vykliceno / s.vyseto) * 100) }))
+                .sort((a, b) => b.pct - a.pct);
+        }
+
+        // Rozpad na jednotlivé druhy (Druh + Varieta) v rámci jednoho rodu -
+        // obdoba desktopového get_Druhy_Srovnani.
+        function seskupPodleDruhuVRode(rows, rod) {
+            const filtered = rows.filter(r => (r.Rod || 'Neuvedeno') === rod && maZadaneKliceni(r));
+            const skupiny = {};
+            filtered.forEach(r => {
+                const nazev = [r.Druh, r.Varieta].filter(Boolean).join(' ') || 'Neuvedeno';
+                if (!skupiny[nazev]) skupiny[nazev] = { label: nazev, vyseto: 0, vykliceno: 0 };
+                skupiny[nazev].vyseto += Number(r.PocetVysetychSemen) || 0;
+                skupiny[nazev].vykliceno += Number(r.PocetVyklicenych) || 0;
+            });
+            return Object.values(skupiny)
+                .filter(s => s.vyseto > 0)
+                .map(s => ({ ...s, pct: Math.round((s.vykliceno / s.vyseto) * 100) }))
+                .sort((a, b) => b.pct - a.pct);
+        }
+
+        function openStatDetailRod(rod) {
+            statDrill = { rod, druh: null };
+            renderStatDetail();
+        }
+
+        function openStatDetailDruh(rod, druhLabel) {
+            statDrill = { rod, druh: druhLabel };
+            renderStatDetail();
+        }
+
+        function backStatDetailToRod() {
+            if (!statDrill.rod) return;
+            openStatDetailRod(statDrill.rod);
+        }
+
+        function closeStatDetail() {
+            statDrill = { rod: null, druh: null };
+            const wrapper = document.getElementById('stat-detail-wrapper');
+            if (wrapper) wrapper.classList.add('hidden');
+        }
+
+        function renderStatDetail() {
+            const wrapper = document.getElementById('stat-detail-wrapper');
+            const title = document.getElementById('stat-detail-title');
+            const body = document.getElementById('stat-detail-body');
+            if (!wrapper || !title || !body) return;
+
+            if (!statDrill.rod) {
+                wrapper.classList.add('hidden');
+                return;
+            }
+            wrapper.classList.remove('hidden');
+
+            if (statDrill.druh) {
+                // Úroveň druhu - seznam jednotlivých výsevů (obdoba
+                // desktopového get_Detail_Druhu), klik na záznam vede rovnou
+                // na kartu rostliny v katalogu.
+                title.textContent = `${statDrill.rod} ${statDrill.druh}`;
+
+                const rows = statKlicivostRows.filter(r => {
+                    const nazev = [r.Druh, r.Varieta].filter(Boolean).join(' ') || 'Neuvedeno';
+                    return (r.Rod || 'Neuvedeno') === statDrill.rod
+                        && nazev === statDrill.druh
+                        && (Number(r.PocetVysetychSemen) || 0) > 0;
+                }).sort((a, b) => (b.DatumVysevu || '').localeCompare(a.DatumVysevu || ''));
+
+                const zaznamyHtml = rows.length === 0
+                    ? '<p class="stat-empty">Žádné jednotlivé výsevy k zobrazení.</p>'
+                    : rows.map(r => {
+                        const vyseto = Number(r.PocetVysetychSemen) || 0;
+                        const datum = r.DatumVysevu || '-';
+                        const dodavatel = r.Dodavatel || 'neuveden';
+                        // Výsev bez zadaného klíčení se v seznamu ukáže (ať
+                        // je vidět, že existuje a jde na něj klepnout a klíčení
+                        // doplnit), ale bez procent - do průměrů výše se
+                        // nepočítá (viz maZadaneKliceni).
+                        let vysledek, pocty;
+                        if (maZadaneKliceni(r)) {
+                            const vykliceno = Number(r.PocetVyklicenych) || 0;
+                            vysledek = `${vyseto > 0 ? Math.round((vykliceno / vyseto) * 100) : 0} %`;
+                            pocty = `${vykliceno}/${vyseto} ks`;
+                        } else {
+                            vysledek = '⏳ čeká na klíčení';
+                            pocty = `vyseto ${vyseto} ks`;
+                        }
+                        return `
+                            <div class="stat-detail-record" onclick="showDetail(${r.RostlinaID})">
+                                <div class="stat-detail-record-head">
+                                    <span>${escapeHtml(datum)}</span>
+                                    <span>${vysledek}</span>
+                                </div>
+                                <div class="stat-detail-record-sub">Dodavatel: ${escapeHtml(dodavatel)} · ${pocty} · #${r.RostlinaID}</div>
+                            </div>
+                        `;
+                    }).join('');
+
+                body.innerHTML = `
+                    <a onclick="backStatDetailToRod()" class="stat-detail-back">‹ Zpět na rod ${escapeHtml(statDrill.rod)}</a>
+                    <h4 class="stat-detail-subtitle">Jednotlivé výsevy</h4>
+                    <div class="stat-detail-records">${zaznamyHtml}</div>
+                `;
+                return;
+            }
+
+            // Úroveň rodu - dodavatelé jen pro tenhle rod (obdoba
+            // desktopového get_Srovnani_Dodavatele) + rozpad na druhy
+            // (obdoba get_Druhy_Srovnani), druh je dál klikatelný.
+            title.textContent = statDrill.rod;
+
+            const rowsProRod = statKlicivostRows.filter(r => (r.Rod || 'Neuvedeno') === statDrill.rod);
+            const podleDodavatele = seskupPodleKlic(rowsProRod, 'Dodavatel');
+            const podleDruhu = seskupPodleDruhuVRode(statKlicivostRows, statDrill.rod);
+
+            body.innerHTML = `
+                <h4 class="stat-detail-subtitle">Dodavatelé pro tenhle rod</h4>
+                <div id="stat-detail-dodavatele"></div>
+                <h4 class="stat-detail-subtitle">Druhy v rodu (klepni pro jednotlivé výsevy)</h4>
+                <div id="stat-detail-druhy"></div>
+            `;
+
+            renderStatBars('stat-detail-dodavatele', podleDodavatele, {
+                valueKey: 'pct',
+                labelKey: 'label',
+                maxValue: 100,
+                fillClass: 'accent',
+                formatValue: r => `${r.pct} % (${r.vykliceno}/${r.vyseto})`,
+                emptyText: 'Pro tenhle rod zatím nejsou dodavatelé s vyplněnou klíčivostí.'
+            });
+
+            renderStatBars('stat-detail-druhy', podleDruhu, {
+                valueKey: 'pct',
+                labelKey: 'label',
+                maxValue: 100,
+                fillClass: '',
+                formatValue: r => `${r.pct} % (${r.vykliceno}/${r.vyseto})`,
+                emptyText: 'Pro tenhle rod zatím nejsou druhy s vyplněnou klíčivostí.',
+                onRowClick: row => openStatDetailDruh(statDrill.rod, row.label)
+            });
+        }
+
+        async function loadStatistiky() {
+            const userEmail = getCurrentUserEmail();
+            if (!userEmail) {
+                switchView('login');
+                return;
+            }
+
+            const lockedBox = document.getElementById('stat-locked');
+            const contentBox = document.getElementById('stat-content');
+
+            if (currentUserTarif !== 'placeny') {
+                if (lockedBox) lockedBox.style.display = 'block';
+                if (contentBox) contentBox.style.display = 'none';
+                return;
+            }
+            if (lockedBox) lockedBox.style.display = 'none';
+            if (contentBox) contentBox.style.display = '';
+
+            // Zavřít případně otevřený drill-down panel z předchozí návštěvy
+            // téhle obrazovky - ať appka nezobrazuje rozpad starého rodu,
+            // než se dotáhnou čerstvá data.
+            closeStatDetail();
+
+            ['stat-klicivost-rod', 'stat-klicivost-dodavatel', 'stat-ztraty', 'stat-podnoze', 'stat-akvizice-obdobi', 'stat-akvizice-typ'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = '<p class="stat-empty">Načítám...</p>';
+            });
+            document.getElementById('stat-souhrn-vyseto').textContent = '-';
+            document.getElementById('stat-souhrn-vyklic').textContent = '-';
+            document.getElementById('stat-souhrn-uspesnost').textContent = '-';
+            const cekajiciSouhrn = document.getElementById('stat-souhrn-cekajici');
+            if (cekajiciSouhrn) { cekajiciSouhrn.textContent = ''; cekajiciSouhrn.classList.add('hidden'); }
+            const akviziceSouhrn = document.getElementById('stat-akvizice-souhrn');
+            if (akviziceSouhrn) akviziceSouhrn.textContent = '';
+
+            // allSettled místo all - když selže jedna sekce (např. síť),
+            // ostatní se i tak vykreslí a appka nezůstane viset na "Načítám...".
+            const vysledky = await Promise.allSettled([
+                loadStatistikyKlicivost(userEmail),
+                loadStatistikyZtraty(userEmail),
+                loadStatistikyPodnoze(userEmail),
+                loadStatistikyAkvizice(userEmail)
+            ]);
+            vysledky.forEach(v => {
+                if (v.status === 'rejected') console.error('Chyba při načítání statistik:', v.reason);
+            });
+        }
+
+        async function loadStatistikyKlicivost(userEmail) {
+            // Stejný filtr jako desktopové get_Klicivost /
+            // get_Klicivost_Dodavatel: jen záznamy, kde se skutečně
+            // vysévalo (PocetVysetychSemen > 0), mimo koš a mimo stav
+            // "Koš" (legacy hodnota z desktopu, na mobilu se dnes
+            // nepoužívá, ale kdyby se import dat vyskytl, ať sedí
+            // 1:1 s tím, co ukazuje desktop).
+            //
+            // Oproti dřívější verzi appka teď tahá i Druh/Varieta/
+            // DatumVysevu/RostlinaID - beze změny filtru, jen širší select,
+            // ať je z čeho postavit drill-down podle rodu/druhu
+            // (statKlicivostRows, viz níže) bez dalšího dotazu do databáze.
+            const { data, error } = await supabaseClient
+                .from('T_Rostliny')
+                .select('RostlinaID, Rod, Druh, Varieta, Dodavatel, DatumVysevu, PocetVysetychSemen, PocetVyklicenych')
+                .eq('user_id', userEmail)
+                .eq('IsDeleted', false)
+                .neq('Stav', 'Koš')
+                .gt('PocetVysetychSemen', 0);
+
+            if (error) throw error;
+
+            const rows = data || [];
+            statKlicivostRows = rows;
+
+            // Souhrnné dlaždice počítají jen vyhodnocené výsevy (se zadaným
+            // klíčením, viz maZadaneKliceni) - všechna tři čísla ze stejné
+            // množiny, ať "Vyklíčeno / Vyseto" sedí s "Úspěšnost". Výsevy,
+            // které na zadání klíčení teprve čekají, se jen spočítají a
+            // vypíšou pod dlaždice.
+            let celkemVyseto = 0;
+            let celkemVykliceno = 0;
+            let cekajiciVysevy = 0;
+            let cekajiciSemena = 0;
+            rows.forEach(r => {
+                if (maZadaneKliceni(r)) {
+                    celkemVyseto += Number(r.PocetVysetychSemen) || 0;
+                    celkemVykliceno += Number(r.PocetVyklicenych) || 0;
+                } else {
+                    cekajiciVysevy += 1;
+                    cekajiciSemena += Number(r.PocetVysetychSemen) || 0;
+                }
+            });
+
+            document.getElementById('stat-souhrn-vyseto').textContent = celkemVyseto.toLocaleString('cs-CZ');
+            document.getElementById('stat-souhrn-vyklic').textContent = celkemVykliceno.toLocaleString('cs-CZ');
+            document.getElementById('stat-souhrn-uspesnost').textContent = celkemVyseto > 0
+                ? Math.round((celkemVykliceno / celkemVyseto) * 100) + ' %'
+                : '-';
+
+            const cekajiciEl = document.getElementById('stat-souhrn-cekajici');
+            if (cekajiciEl) {
+                cekajiciEl.textContent = cekajiciVysevy > 0
+                    ? `⏳ Dalších ${cekajiciVysevy} ${cekajiciVysevy === 1 ? 'výsev' : (cekajiciVysevy <= 4 ? 'výsevy' : 'výsevů')} (${cekajiciSemena.toLocaleString('cs-CZ')} semen) čeká na zadání počtu vyklíčených - do klíčivosti se zatím nepočítá.`
+                    : '';
+                cekajiciEl.classList.toggle('hidden', cekajiciVysevy === 0);
+            }
+
+            const podleRodu = seskupPodleKlic(rows, 'Rod');
+            renderStatBars('stat-klicivost-rod', podleRodu, {
+                valueKey: 'pct',
+                labelKey: 'label',
+                maxValue: 100,
+                fillClass: '',
+                formatValue: r => `${r.pct} % (${r.vykliceno}/${r.vyseto})`,
+                emptyText: 'Zatím tu nejsou žádné výsevy pro statistiku klíčivosti.',
+                // Klik na rod otevře drill-down panel (dodavatelé + druhy
+                // jen pro tenhle rod) - viz openStatDetailRod/renderStatDetail výše.
+                onRowClick: row => openStatDetailRod(row.label)
+            });
+
+            const podleDodavatele = seskupPodleKlic(rows, 'Dodavatel');
+            renderStatBars('stat-klicivost-dodavatel', podleDodavatele, {
+                valueKey: 'pct',
+                labelKey: 'label',
+                maxValue: 100,
+                fillClass: 'accent',
+                formatValue: r => `${r.pct} % (${r.vykliceno}/${r.vyseto})`,
+                emptyText: 'Zatím tu nejsou žádné výsevy s vyplněným dodavatelem.'
+            });
+        }
+
+        async function loadStatistikyZtraty(userEmail) {
+            // Stejný filtr jako desktopové get_StatistikaUhynu: příčina
+            // úhynu/odcizení se dnes pozná jen z textu poznámky u změny
+            // stavu (T_HistorieStavu.Poznamka), RLS na tabulce zajišťuje,
+            // že appka vidí jen historii vlastních rostlin. Od sql_27 sem
+            // zapisuje i změna stavu z mobilu (zmen_stav()), dřív ji
+            // statistika vůbec neviděla.
+            const { data, error } = await supabaseClient
+                .from('T_HistorieStavu')
+                .select('Poznamka, Pocet')
+                .or('Poznamka.ilike.%uhyn%,Poznamka.ilike.%odcizena%');
+
+            if (error) throw error;
+
+            const rows = data || [];
+            const skupiny = {};
+            let celkem = 0;
+
+            rows.forEach(r => {
+                const pocet = Number(r.Pocet) || 0;
+                celkem += pocet;
+                const duvod = r.Poznamka || 'Neuvedeno';
+                if (!skupiny[duvod]) skupiny[duvod] = { label: `${duvod} (${0} ks)`, duvod, pocet: 0 };
+                skupiny[duvod].pocet += pocet;
+            });
+
+            const seznam = Object.values(skupiny)
+                .map(s => ({
+                    label: `${s.duvod} (${s.pocet} ks)`,
+                    pct: celkem > 0 ? Math.round((s.pocet / celkem) * 1000) / 10 : 0
+                }))
+                .sort((a, b) => {
+                    const aOdciz = a.label.toLowerCase().includes('odciz');
+                    const bOdciz = b.label.toLowerCase().includes('odciz');
+                    if (aOdciz !== bOdciz) return aOdciz ? 1 : -1;
+                    return b.pct - a.pct;
+                });
+
+            renderStatBars('stat-ztraty', seznam, {
+                valueKey: 'pct',
+                labelKey: 'label',
+                maxValue: 100,
+                fillClass: 'danger',
+                formatValue: r => `${r.pct} %`,
+                emptyText: 'Zatím tu nejsou evidované žádné ztráty - dobrý znamení!'
+            });
+        }
+
+        async function loadStatistikyPodnoze(userEmail) {
+            // Stejný filtr jako desktopové get_StatistikaPodnozi: RLS na
+            // rostlina_podnoz_historie zajišťuje, že appka vidí jen
+            // historii vlastních rostlin.
+            const { data, error } = await supabaseClient
+                .from('rostlina_podnoz_historie')
+                .select('podnoz, datum_od, datum_do')
+                .not('podnoz', 'is', null)
+                .neq('podnoz', '')
+                .not('podnoz', 'ilike', '%Žádná%');
+
+            if (error) throw error;
+
+            const rows = data || [];
+            const today = new Date();
+            const skupiny = {};
+
+            rows.forEach(r => {
+                if (!r.datum_od) return;
+                const od = new Date(r.datum_od);
+                const do_ = r.datum_do ? new Date(r.datum_do) : today;
+                const dny = (do_ - od) / (1000 * 60 * 60 * 24);
+                const mesice = dny / 30.44;
+
+                const klic = r.podnoz;
+                if (!skupiny[klic]) skupiny[klic] = { label: klic, soucetMesicu: 0, pocet: 0 };
+                skupiny[klic].soucetMesicu += mesice;
+                skupiny[klic].pocet += 1;
+            });
+
+            const seznam = Object.values(skupiny)
+                .map(s => ({ label: s.label, prumer: Math.round((s.soucetMesicu / s.pocet) * 10) / 10 }))
+                .sort((a, b) => b.prumer - a.prumer);
+
+            renderStatBars('stat-podnoze', seznam, {
+                valueKey: 'prumer',
+                labelKey: 'label',
+                fillClass: 'accent',
+                formatValue: r => `${r.prumer} měs.`,
+                emptyText: 'Zatím tu nejsou žádná data pro statistiku podnoží ve tvé sbírce.'
+            });
+        }
+
+        // --- Timeline akvizic (TODO "Další statistiky", 2026-09-22) ---
+        //
+        // Kolik nových záznamů přibylo do sbírky v čase - po měsících ve
+        // zvoleném roce, nebo po letech při volbě "Všechny roky" - a
+        // rozpad podle typu akvizice (Výsev, Rostlina, Odnož, Řízek...).
+        //
+        // Pravidla (záměrně jednoduchá, ať sedí s tím, co uživatel vnímá
+        // jako "pořízení"):
+        // - Datum akvizice = T_Rostliny.DatumVysevu (u výsevu datum výsevu,
+        //   u koupené rostliny datum pořízení - obojí zadává uživatel sám).
+        // - Výsev = 1 záznam bez ohledu na počet semen.
+        // - Semenáčky oddělené z vlastního výsevu (ParentID vyplněné -
+        //   vznikají přes rozdel_rostlinu()) se NEpočítají, nejde o novou
+        //   akvizici, jen o rozdělení už započítaného výsevu. Odnože/řízky
+        //   zadané ručně přes "Nová rostlina" ParentID nemají, takže se
+        //   počítají normálně.
+        // - Koš (IsDeleted) se nepočítá; uhynulé/prodané rostliny ano -
+        //   jde o historii přírůstků, ne o současný stav sbírky.
+        const NAZVY_MESICU = ['Leden', 'Únor', 'Březen', 'Duben', 'Květen', 'Červen',
+            'Červenec', 'Srpen', 'Září', 'Říjen', 'Listopad', 'Prosinec'];
+        const AKVIZICE_VSECHNY_ROKY = 'vse';
+
+        // Cache řádků z poslední loadStatistikyAkvizice() - přepnutí roku
+        // v roletce jen překreslí z téhle cache, bez dalšího dotazu do DB.
+        let statAkviziceRows = [];
+
+        async function loadStatistikyAkvizice(userEmail) {
+            const { data, error } = await supabaseClient
+                .from('T_Rostliny')
+                .select('RostlinaID, DatumVysevu, TypAkvizice')
+                .eq('user_id', userEmail)
+                .eq('IsDeleted', false)
+                .neq('Stav', 'Koš')
+                .is('ParentID', null)
+                .not('DatumVysevu', 'is', null);
+
+            if (error) throw error;
+
+            statAkviziceRows = (data || []).filter(r => /^\d{4}-\d{2}/.test(r.DatumVysevu || ''));
+
+            // Roletka období: "Všechny roky" + jednotlivé roky, kde něco
+            // přibylo (od nejnovějšího). Předchozí volba se zachová, pokud
+            // pořád dává smysl; jinak výchozí = aktuální rok, pokud v něm
+            // něco je, jinak nejnovější rok s daty.
+            const select = document.getElementById('stat-akvizice-rok');
+            const predchoziVolba = select ? select.value : '';
+            const roky = [...new Set(statAkviziceRows.map(r => r.DatumVysevu.substring(0, 4)))]
+                .sort((a, b) => b.localeCompare(a));
+
+            if (select) {
+                select.innerHTML = `<option value="${AKVIZICE_VSECHNY_ROKY}">Všechny roky</option>` +
+                    roky.map(rok => `<option value="${rok}">${rok}</option>`).join('');
+
+                const aktualniRok = String(new Date().getFullYear());
+                if (predchoziVolba && (predchoziVolba === AKVIZICE_VSECHNY_ROKY || roky.includes(predchoziVolba))) {
+                    select.value = predchoziVolba;
+                } else if (roky.includes(aktualniRok)) {
+                    select.value = aktualniRok;
+                } else if (roky.length > 0) {
+                    select.value = roky[0];
+                } else {
+                    select.value = AKVIZICE_VSECHNY_ROKY;
+                }
+            }
+
+            renderStatAkvizice();
+        }
+
+        // Čistá agregace (bez DOM) - zvlášť, ať jde snadno otestovat.
+        // obdobi = 'vse' → po letech; jinak 'RRRR' → 12 měsíců toho roku.
+        function spocitejAkvizice(rows, obdobi) {
+            const vybrane = obdobi === AKVIZICE_VSECHNY_ROKY
+                ? rows
+                : rows.filter(r => r.DatumVysevu.substring(0, 4) === obdobi);
+
+            let casovaRada;
+            if (obdobi === AKVIZICE_VSECHNY_ROKY) {
+                const podleRoku = {};
+                vybrane.forEach(r => {
+                    const rok = r.DatumVysevu.substring(0, 4);
+                    podleRoku[rok] = (podleRoku[rok] || 0) + 1;
+                });
+                casovaRada = Object.keys(podleRoku)
+                    .sort((a, b) => a.localeCompare(b))
+                    .map(rok => ({ label: rok, pocet: podleRoku[rok] }));
+            } else {
+                const mesice = new Array(12).fill(0);
+                vybrane.forEach(r => {
+                    const m = parseInt(r.DatumVysevu.substring(5, 7), 10);
+                    if (m >= 1 && m <= 12) mesice[m - 1] += 1;
+                });
+                casovaRada = mesice.map((pocet, i) => ({ label: NAZVY_MESICU[i], pocet }));
+            }
+
+            const podleTypu = {};
+            vybrane.forEach(r => {
+                const typ = r.TypAkvizice || 'Neuvedeno';
+                podleTypu[typ] = (podleTypu[typ] || 0) + 1;
+            });
+            const typy = Object.entries(podleTypu)
+                .map(([label, pocet]) => ({ label, pocet }))
+                .sort((a, b) => b.pocet - a.pocet);
+
+            return { celkem: vybrane.length, casovaRada, typy };
+        }
+
+        // Skloňování "záznam" (1 záznam, 2-4 záznamy, 5+ záznamů).
+        function slovoZaznam(n) {
+            if (n === 1) return 'záznam';
+            if (n >= 2 && n <= 4) return 'záznamy';
+            return 'záznamů';
+        }
+
+        function renderStatAkvizice() {
+            const select = document.getElementById('stat-akvizice-rok');
+            const souhrnEl = document.getElementById('stat-akvizice-souhrn');
+            const obdobi = select ? select.value : AKVIZICE_VSECHNY_ROKY;
+
+            if (statAkviziceRows.length === 0) {
+                if (souhrnEl) souhrnEl.textContent = '';
+                renderStatBars('stat-akvizice-obdobi', [], { emptyText: 'Zatím tu nejsou žádné záznamy s vyplněným datem pořízení/výsevu.' });
+                renderStatBars('stat-akvizice-typ', [], { emptyText: 'Zatím tu nejsou žádná data.' });
+                return;
+            }
+
+            const { celkem, casovaRada, typy } = spocitejAkvizice(statAkviziceRows, obdobi);
+
+            if (souhrnEl) {
+                const kdy = obdobi === AKVIZICE_VSECHNY_ROKY ? 'Celkem za všechny roky' : `V roce ${obdobi}`;
+                let text = `${kdy}: ${celkem} ${slovoZaznam(celkem)}.`;
+                const nejvic = casovaRada.reduce((max, r) => (r.pocet > max.pocet ? r : max), { pocet: 0 });
+                if (nejvic.pocet > 0 && casovaRada.length > 1) {
+                    text += ` Nejvíc: ${nejvic.label} (${nejvic.pocet}).`;
+                }
+                souhrnEl.textContent = text;
+            }
+
+            renderStatBars('stat-akvizice-obdobi', casovaRada, {
+                valueKey: 'pocet',
+                labelKey: 'label',
+                fillClass: '',
+                formatValue: r => r.pocet > 0 ? String(r.pocet) : '–',
+                emptyText: 'V tomhle období nic nepřibylo.'
+            });
+
+            renderStatBars('stat-akvizice-typ', typy, {
+                valueKey: 'pocet',
+                labelKey: 'label',
+                fillClass: 'accent',
+                formatValue: r => `${r.pocet} (${celkem > 0 ? Math.round((r.pocet / celkem) * 100) : 0} %)`,
+                emptyText: 'V tomhle období nic nepřibylo.'
+            });
+        }
+    </script>
+</body>
+</html>
